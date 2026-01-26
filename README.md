@@ -1,3 +1,14 @@
+# Difficulty Enhancements
+
+The intention is to tune the Brutal AI to be less spammy with units / harvestors / discourage building infinite refineries
+
+- Harvestors are no longer given for free with refinery
+- Brutal AI reduced back down to normal producing/costs but keeping all the other enhancements
+- WIP: To avoid harvestor spam i want to introduce respawning worms that prioritise harvesters as their priority until the count of harvestors goes to 3
+- WIP: Worms are increasingly more aggressive the higher the harvestor count past 3
+- WIP: If a worm is "killed" it just hides and comes back up later, if there is more than 3 harvestors the count goes alot quicker
+- WIP: Increase default cost of refinery to 450 credits
+
 # Dune Dynasty
 
 [![Latest Release](https://img.shields.io/github/v/release/gameflorist/dunedynasty?display_name=tag&label=Download%20Latest%20Release&style=for-the-badge)](https://github.com/gameflorist/dunedynasty/releases)
