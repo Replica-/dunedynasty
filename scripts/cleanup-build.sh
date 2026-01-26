@@ -6,4 +6,3 @@ rm -f Makefile
 rm -f include/buildcfg.h
 rm -rf dist
 rm -rf build
-cp ./dune2data/* ./dist/data

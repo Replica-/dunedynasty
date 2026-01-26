@@ -84,7 +84,7 @@ uint16 g_campaignID = 0;
 uint16 g_scenarioID = 1;
 uint16 g_activeAction = 0xFFFF;      /*!< Action the controlled unit will do. */
 
-bool   g_debugGame = false;        /*!< When true, you can control the AI. */
+bool   g_debugGame = true;        /*!< When true, you can control the AI. */
 bool   g_debugScenario = false;    /*!< When true, you can review the scenario. There is no fog. The game is not running (no unit-movement, no structure-building, etc). You can click on individual tiles. */
 
 void *g_readBuffer = NULL;

@@ -296,17 +296,12 @@ GameLoop_Client_ProcessGameInput(bool init_transform, uint16 key)
 			}
 			break;
 
-#if 0
 		/* Debugging. */
 		case SCANCODE_F9:
 			Tile_RemoveFogInRadius(FLAG_HOUSE_ALL, UNVEILCAUSE_LONG,
-					Tile_UnpackTile(Tile_PackXY(32, 32)), 64);
+			Tile_UnpackTile(Tile_PackXY(32, 32)), 64);
 			break;
 
-		case SCANCODE_F10:
-			s_debugForceWin = true;
-			break;
-#endif
 
 		case 0:
 			break;

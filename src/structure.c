@@ -229,7 +229,7 @@ void GameLoop_Structure(void)
 
 					/* For brutal AI, half production cost. */
 					if (AI_IsBrutalAI(s->o.houseID)) {
-						buildCost = buildSpeed * buildCost / (256);
+						buildCost = buildSpeed * buildCost / (2*256);
 					} else if (buildSpeed < 256) {
 						buildCost = buildSpeed * buildCost / 256;
 					}
