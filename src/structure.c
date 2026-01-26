@@ -218,7 +218,7 @@ void GameLoop_Structure(void)
 						if (AI_IsBrutalAI(s->o.houseID)) {
 							/* For brutal AI, double production speed (except for ornithopters). */
 							if (!(s->o.type == STRUCTURE_HIGH_TECH && s->objectType == UNIT_ORNITHOPTER))
-								buildSpeed *= 2;
+								buildSpeed *= 1;
 						} else if (buildSpeed > g_campaignID * 20 + 95) {
 							/* For AIs, we slow down building speed in all but the last campaign */
 							buildSpeed = g_campaignID * 20 + 95;
@@ -229,7 +229,7 @@ void GameLoop_Structure(void)
 
 					/* For brutal AI, half production cost. */
 					if (AI_IsBrutalAI(s->o.houseID)) {
-						buildCost = buildSpeed * buildCost / (256 * 2);
+						buildCost = buildSpeed * buildCost / (256);
 					} else if (buildSpeed < 256) {
 						buildCost = buildSpeed * buildCost / 256;
 					}

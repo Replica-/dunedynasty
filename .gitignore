@@ -42,3 +42,32 @@ static/general/music/*/*.aud
 build.ninja
 node_modules
 .vscode
+dune2data/XTRE.PAK
+dune2data/Waveset.DAT
+dune2data/VOC.PAK
+dune2data/SOUND.PAK
+dune2data/SETUPENG.DIP
+dune2data/SETUP.EXE
+dune2data/SCENARIO.PAK
+dune2data/ORDOS.PAK
+dune2data/OPTIONS.CFG
+dune2data/ONETIME.DAT
+dune2data/MERC.PAK
+dune2data/MENTAT.PAK
+dune2data/INTROVOC.PAK
+dune2data/INTRO.PAK
+dune2data/HERC.PAK
+dune2data/HARK.PAK
+dune2data/FINALE.PAK
+dune2data/FILELIST.TXT
+dune2data/ENGLISH.PAK
+dune2data/DUNE2.PIF
+dune2data/DUNE2.ICO
+dune2data/DUNE2.EXE
+dune2data/Dune2.BAT
+dune2data/DUNE.PAK
+dune2data/DUNE.CFG
+dune2data/Dune II Unit Guide.txt
+dune2data/Dune II Icons.icl
+dune2data/CREDITS.ENG
+dune2data/ATRE.PAK

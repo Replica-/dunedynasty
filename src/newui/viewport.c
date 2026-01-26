@@ -295,12 +295,12 @@ Viewport_Server_Place(House *h, Structure *s, uint16 packed)
 		if (g_validateStrictIfZero == 0 && s->o.type == STRUCTURE_REFINERY) {
 			Unit *u;
 
-			g_validateStrictIfZero++;
-			u = Unit_CreateWrapper(houseID, UNIT_HARVESTER, Tools_Index_Encode(s->o.index, IT_STRUCTURE));
-			g_validateStrictIfZero--;
+			// g_validateStrictIfZero++;
+			//u = Unit_CreateWrapper(houseID, UNIT_HARVESTER, Tools_Index_Encode(s->o.index, IT_STRUCTURE));
+			// g_validateStrictIfZero--;
 
 			if (u == NULL) {
-				h->harvestersIncoming++;
+				// h->harvestersIncoming++;
 			} else {
 				u->originEncoded = Tools_Index_Encode(s->o.index, IT_STRUCTURE);
 			}
