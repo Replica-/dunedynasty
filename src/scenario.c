@@ -1225,8 +1225,8 @@ Scenario_Create_Unit(enum HouseType houseType, enum UnitType unitType,
 
 	/* XXX -- There is no way this is ever possible, as the beingBuilt flag is unset by Unit_Allocate() */
 	if (!u->o.flags.s.isNotOnMap)
-		// @REplica no point in sending a unit for ambush if its just going to die, this might break some other scenarions
-		if (u->actionID == ACTION_AMBUSH)
+		// @REplica no point in sending a unit for ambush if its just going to die, but the starter levels you kinda expect kamikaze
+		if (u->actionID == ACTION_AMBUSH && unitType != UNIT_SANDWORM && g_campaignID > 2)
 			Unit_Server_SetAction(u, ACTION_AREA_GUARD);
 		else
 			Unit_Server_SetAction(u, u->actionID);

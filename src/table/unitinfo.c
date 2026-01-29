@@ -1865,7 +1865,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* shortcut             */ 0
 	},
 
-	{ /* 25 */
+	{ /* 25 */ // REPLICA
 		{ /* objectInfo */
 		/* stringID_abbrev      */ STR_SANDWORM,
 		/* name                 */ "Sandworm",
@@ -1887,7 +1887,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* priority             */ true
 		},
 		/* spawnChance          */ 0,
-		/* hitpoints            */ 1000,
+		/* hitpoints            */ 8000,
 		/* fogUncoverRadius     */ 0,
 		/* spriteID             */ SHAPE_SANDWORM,
 		/* buildCredits         */ 0,
@@ -1923,8 +1923,8 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* dimension            */ 24,
 		/* movementType         */ MOVEMENT_SLITHER,
 		/* animationSpeed       */ 0,
-		/* movingSpeedFactor    */ 35,
-		/* turningSpeed         */ 3,
+		/* movingSpeedFactor    */ 8,
+		/* turningSpeed         */ 2,
 		/* groundSpriteID       */ 161,
 		/* turretSpriteID       */ -1,
 		/* actionAI             */ ACTION_INVALID,

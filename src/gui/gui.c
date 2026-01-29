@@ -2211,7 +2211,15 @@ void GUI_Palette_CreateRemap(uint8 houseID)
 		loc6 = i / 16;
 		loc4 = i % 16;
 		if (loc6 == 9 && loc4 <= 6) {
-			*remap = (houseID << 4) + 0x90 + loc4;
+			// Replica nothing to see here
+			if (houseID == 1){
+				*remap = (houseID << 4) + 0x90 + loc4;
+			} else {
+				*remap = (houseID << 4) + 0x90 + loc4;
+			}
+			
+
+
 		}
 	}
 }
