@@ -1312,6 +1312,20 @@ Unit *Unit_Sandworm_FindBestTarget(Unit *unit)
 
 	if (unit == NULL) return NULL;
 
+	// REPLICA
+	// Harvestor count
+	PoolFindStruct findMe;
+	uint16 count = 0;
+	Unit *lastUnit = NULL;
+	for (Unit *u = Unit_FindFirst(&findMe, g_playerHouseID, UNIT_HARVESTER);u != NULL;u = Unit_FindNext(&find)) {
+		lastUnit = u;
+		count++;
+	}
+	// If the target is the player house and its a harvestor and the harvestor count is more than 3 target them as highest priority
+	if (lastUnit != NULL && Unit_GetHouseID(lastUnit) == g_playerHouseID && count > 3) {
+		return lastUnit;
+	}
+
 	for (Unit *u = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_INVALID);
 			u != NULL;
 			u = Unit_FindNext(&find)) {
