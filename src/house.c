@@ -83,7 +83,7 @@ void GameLoop_House(void)
 
 	if (g_tickHouseReinforcement <= g_timerGame) {
 		tickReinforcement = true;
-		g_tickHouseReinforcement = g_timerGame + (g_debugGame ? 60 : 600);
+		g_tickHouseReinforcement = g_timerGame + (g_debugGame ? 600 : 600);
 	}
 
 	if (g_tickHouseMissileCountdown <= g_timerGame) {

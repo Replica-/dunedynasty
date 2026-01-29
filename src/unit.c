@@ -746,7 +746,7 @@ Unit_Server_SetAction(Unit *u, enum UnitActionType action)
 
 	if (u == NULL) return;
 	if (u->actionID == ACTION_DESTRUCT || u->actionID == ACTION_DIE || action == ACTION_INVALID) return;
-
+	
 	/* ENHANCEMENT -- When sandworms are insatiable, change ambush to
 	 * area guard to prevent eating too many units in quick succession.
 	 */
