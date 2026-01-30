@@ -83,7 +83,7 @@ void GameLoop_Structure(void)
 		g_tickStructurePalace = g_timerGame + 60;
 	}
 
-	if (g_debugScenario) return;
+	//if (g_debugScenario) return;
 
 	for (Structure *s = Structure_FindFirst(&find, HOUSE_INVALID, STRUCTURE_INVALID);
 			s != NULL;

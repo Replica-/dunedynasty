@@ -295,8 +295,9 @@ Viewport_Server_Place(House *h, Structure *s, uint16 packed)
 		if (g_validateStrictIfZero == 0 && s->o.type == STRUCTURE_REFINERY) {
 			Unit *u;
 
+			// Replica
 			// g_validateStrictIfZero++;
-			//u = Unit_CreateWrapper(houseID, UNIT_HARVESTER, Tools_Index_Encode(s->o.index, IT_STRUCTURE));
+			// u = Unit_CreateWrapper(houseID, UNIT_HARVESTER, Tools_Index_Encode(s->o.index, IT_STRUCTURE));
 			// g_validateStrictIfZero--;
 
 			if (u == NULL) {

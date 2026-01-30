@@ -667,17 +667,15 @@ uint16 Script_Unit_Fire(ScriptEngine *script)
 
 			Unit_UpdateMap(1, u);
 
-			if (!enhancement_insatiable_sandworms)
-				u->amount--;
+			// replica
+			//if (!enhancement_insatiable_sandworms)
+			u->amount--;
 
 			// Replica 
-			script->delay = 3200;
+			script->delay = 2000;
 
 			if ((int8)u->amount < 1) {
 				Unit_Server_SetAction(u, ACTION_DIE);
-
-				// I want to respawn them immedaiately REPLICA
-				Scenario_Create_Reinforcement(9999, HOUSE_FREMEN, UNIT_SANDWORM, 1, 1, 1);
 			}
 				
 		} break;

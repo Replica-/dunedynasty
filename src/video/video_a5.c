@@ -2779,7 +2779,7 @@ Video_DrawMinimap(int left, int top, int map_scale, enum MinimapDrawMode mode)
 				} else if (t->hasUnit && ((u = Unit_Get_ByPackedTile(packed)) != NULL)) {
 					if (u->o.type == UNIT_SANDWORM) {
 						/* Really shouldn't have more than 3, but anyway. */
-						if (num_sandworms < 4) {
+						if (num_sandworms < 6) {
 							sandworm_position[2*num_sandworms + 0] = x;
 							sandworm_position[2*num_sandworms + 1] = y;
 							num_sandworms++;

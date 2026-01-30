@@ -361,7 +361,15 @@ void GameLoop_Unit(void)
 	bool tickUnknown5  = false;
 	bool tickDeviation = false;
 
-	if (g_debugScenario) return;
+	// replica
+	//const int worm_count = UnitAI_CountUnits(HOUSE_FREMEN, UNIT_SANDWORM);
+	//if (worm_count < 50) {
+	// Count the player harvestors on the map and equal them
+	Unit *unit = Unit_CreateWrapper(HOUSE_FREMEN, UNIT_SANDWORM, 0);
+	// Replica create sandworms to hunt always
+	if (unit && unit->o.type == UNIT_SANDWORM) {
+		Unit_Server_SetAction(unit, ACTION_HUNT);
+	}
 
 	if (g_tickUnitMovement <= g_timerGame) {
 		tickMovement = true;
@@ -1229,6 +1237,12 @@ Unit *Unit_FindBestTargetUnit(Unit *u, uint16 mode)
 	for (Unit *target = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_INVALID);
 			target != NULL;
 			target = Unit_FindNext(&find)) {
+		
+		// Replica DONT let them kill my precioius sandworms ever
+		if (target->o.type == UNIT_SANDWORM && Unit_GetHouseID(u) != g_playerHouseID ) {
+			continue;
+		}
+
 		if (mode != 0 && mode != 4) {
 			if (mode == 1) {
 				if (Tile_GetDistance(u->o.position, target->o.position) > distance) continue;
@@ -1321,7 +1335,7 @@ Unit *Unit_Sandworm_FindBestTarget(Unit *unit)
 		lastUnit = u;
 		count++;
 	}
-	// If the target is the player house and its a harvestor and the harvestor count is more than 3 target them as highest priority
+	// Replica If the target is the player house and its a harvestor and the harvestor count is more than 3 target them as highest priority
 	if (lastUnit != NULL && Unit_GetHouseID(lastUnit) == g_playerHouseID && count > 3) {
 		return lastUnit;
 	}
@@ -1329,6 +1343,12 @@ Unit *Unit_Sandworm_FindBestTarget(Unit *unit)
 	for (Unit *u = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_INVALID);
 			u != NULL;
 			u = Unit_FindNext(&find)) {
+
+		// Replica dont attach things that are guarding
+		if (u->actionID == ACTION_AREA_GUARD && Unit_GetHouseID(u) != g_playerHouseID) continue;
+	    // Replica dont attack ai controlled harvesters because they are shiny and nice :)
+		if (Unit_GetHouseID(u) != g_playerHouseID && u->o.type == UNIT_HARVESTER) continue;
+
 		const uint16 priority = Unit_Sandworm_GetTargetPriority(unit, u);
 
 		if (priority >= bestPriority) {

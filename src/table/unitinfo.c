@@ -1887,7 +1887,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* priority             */ true
 		},
 		/* spawnChance          */ 0,
-		/* hitpoints            */ 8000,
+		/* hitpoints            */ 400,
 		/* fogUncoverRadius     */ 0,
 		/* spriteID             */ SHAPE_SANDWORM,
 		/* buildCredits         */ 0,
@@ -1903,8 +1903,9 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* priorityTarget       */ 0,
 		/* availableHouse       */ FLAG_HOUSE_FREMEN,
 		},
-		/* indexStart           */ 16,
-		/* indexEnd             */ 18,
+		//Replica
+		/* indexStart           */ 109,
+		/* indexEnd             */ 120,
 		{ /* flags */
 		/* isBullet             */ false,
 		/* explodeOnDeath       */ false,
@@ -1923,7 +1924,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* dimension            */ 24,
 		/* movementType         */ MOVEMENT_SLITHER,
 		/* animationSpeed       */ 0,
-		/* movingSpeedFactor    */ 8,
+		/* movingSpeedFactor    */ 6,
 		/* turningSpeed         */ 2,
 		/* groundSpriteID       */ 161,
 		/* turretSpriteID       */ -1,

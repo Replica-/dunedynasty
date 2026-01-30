@@ -128,6 +128,18 @@ StructureAI_CountStructures(enum HouseType houseID, enum StructureType type)
 }
 
 static bool
+StructureAI_ShouldBuildThopter(enum HouseType houseID)
+{
+	const int carryall_count = UnitAI_CountUnits(houseID, UNIT_ORNITHOPTER);
+	const int optimal_carryall_count = 1;
+
+	/* Build a second carryall since we have more harvesters, but it
+	 * will also help out with repair duty, and serves as a backup.
+	 */
+	return (optimal_carryall_count > carryall_count);
+}
+
+static bool
 StructureAI_ShouldBuildCarryalls(enum HouseType houseID)
 {
 	const int carryall_count = UnitAI_CountUnits(houseID, UNIT_CARRYALL);
@@ -143,7 +155,7 @@ static bool
 StructureAI_ShouldBuildHarvesters(enum HouseType houseID)
 {
 	const int harvester_count = UnitAI_CountUnits(houseID, UNIT_HARVESTER);
-
+	
 	/* If no harvesters, wait for the gifted harvester. */
 	if (harvester_count == 0)
 		return false;
@@ -170,6 +182,7 @@ StructureAI_ShouldBuildInfantry(enum HouseType houseID)
 static uint32
 StructureAI_FilterBuildOptions(enum StructureType s, enum HouseType houseID, uint32 buildable)
 {
+	
 	switch (s) {
 		case STRUCTURE_HEAVY_VEHICLE:
 			if (!StructureAI_ShouldBuildHarvesters(houseID))
@@ -181,8 +194,14 @@ StructureAI_FilterBuildOptions(enum StructureType s, enum HouseType houseID, uin
 		case STRUCTURE_HIGH_TECH:
 			if (!StructureAI_ShouldBuildCarryalls(houseID))
 				buildable &= ~FLAG_UNIT_CARRYALL;
+		
+			// Replica god these guys are annoying on brutal - cap at 2
+			if (!StructureAI_ShouldBuildThopter(houseID))
+				buildable &= ~FLAG_UNIT_ORNITHOPTER;
+		
+			if (((g_timerGame - g_tickScenarioStart) / 60 / 60) < 10)
+				buildable &= ~FLAG_UNIT_ORNITHOPTER;
 			break;
-
 		case STRUCTURE_BARRACKS:
 			if (!StructureAI_ShouldBuildInfantry(houseID))
 				buildable &= ~(FLAG_UNIT_INFANTRY | FLAG_UNIT_SOLDIER);
@@ -375,6 +394,8 @@ StructureAI_PickNextToBuild(const Structure *s)
 
 	uint16 type = 0xFFFF;
 	uint16 priority_type = 0;
+
+	// REPLICA
 	for (int j = 0; j < UNIT_MAX; j++) {
 		uint16 priority_i;
 		uint16 i;
