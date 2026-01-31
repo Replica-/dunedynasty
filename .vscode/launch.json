@@ -10,8 +10,9 @@
       "args": [
         "/c",
         "D:\\development\\msys64\\msys2_shell.cmd",
+        "-ucrt64",
         "-c",
-        "bash /d/development/dunedynasty/scripts/build-debug-windows-x64.sh"
+        "cd /d/development/dunedynasty/ && bash /d/development/dunedynasty/scripts/build-debug-windows-x64.sh"
       ],
       "stopAtEntry": false,
       "console": "externalTerminal" // Opens the shell in a new window
