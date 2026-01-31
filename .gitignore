@@ -41,7 +41,6 @@ static/general/music/*/*.aud
 .ninja_log
 build.ninja
 node_modules
-.vscode
 dune2data/XTRE.PAK
 dune2data/Waveset.DAT
 dune2data/VOC.PAK
