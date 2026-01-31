@@ -6,10 +6,12 @@
       "type": "cppvsdbg", // Or "cmake" or appropriate debugger type
       "request": "launch",
       "cwd": "${workspaceFolder}",
-      "program": "D:\\development\\msys64\\ucrt64.exe",
+      "program": "cmd",
       "args": [
+        "/c",
+        "D:\\development\\msys64\\msys2_shell.cmd",
         "-c",
-        "cd /d/development/dunedynasty; bash /d/development/dunedynasty/scripts/build-debug-windows-x64.sh"
+        "bash /d/development/dunedynasty/scripts/build-debug-windows-x64.sh"
       ],
       "stopAtEntry": false,
       "console": "externalTerminal" // Opens the shell in a new window

@@ -170,7 +170,9 @@ bool enhancement_play_additional_voices = true;
  * and indexEnd of all ground units (incl. saboteurs) to allow a total of 300.
  * This will always be active with skirmish/multiplayer.
  */
-bool enhancement_raise_unit_cap = false;
+
+// REplica
+bool enhancement_raise_unit_cap = true;
 
 /**
  * Dune II limits total structures on a map to about 70.
