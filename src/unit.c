@@ -346,6 +346,20 @@ static void Unit_MovementTick(Unit *unit)
 	unit->speedRemainder = speed & 0xFF;
 }
 
+// Replica
+static uint16 Unit_CountUnits(enum HouseType houseID, enum UnitType unit_type) {
+	uint16 count = 0;
+	PoolFindStruct find;
+	
+	for (Unit *target = Unit_FindFirst(&find, houseID, unit_type);
+			target != NULL;
+			target = Unit_FindNext(&find)) {
+		count++;
+	}
+		
+	return count;
+}
+
 /**
  * Loop over all units, performing various of tasks.
  */
@@ -362,13 +376,20 @@ void GameLoop_Unit(void)
 	bool tickDeviation = false;
 
 	// replica
-	//const int worm_count = UnitAI_CountUnits(HOUSE_FREMEN, UNIT_SANDWORM);
-	//if (worm_count < 50) {
 	// Count the player harvestors on the map and equal them
-	Unit *unit = Unit_CreateWrapper(HOUSE_FREMEN, UNIT_SANDWORM, 0);
-	// Replica create sandworms to hunt always
-	if (unit && unit->o.type == UNIT_SANDWORM) {
-		Unit_Server_SetAction(unit, ACTION_HUNT);
+	const int harvestor_count = Unit_CountUnits(g_playerHouseID, UNIT_HARVESTER);
+	
+	// Harvestor count is more than 3 smash the map with worms
+	if (harvestor_count > 3) {
+		const int worm_count = Unit_CountUnits(HOUSE_FREMEN, UNIT_SANDWORM);
+			
+		if (worm_count < harvestor_count) {
+			Unit *unit = Unit_CreateWrapper(HOUSE_FREMEN, UNIT_SANDWORM, 0);
+			// Replica create sandworms to hunt always
+			if (unit && unit->o.type == UNIT_SANDWORM) {
+				Unit_Server_SetAction(unit, ACTION_HUNT);
+			}
+		}
 	}
 
 	if (g_tickUnitMovement <= g_timerGame) {

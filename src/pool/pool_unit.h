@@ -9,7 +9,7 @@
 #include "../enhancement.h"
 
 enum {
-	UNIT_INDEX_MAX      = 102, /* Highest index for any Unit. */
+	UNIT_INDEX_MAX      = 150, /* Highest index for any Unit. */
 
 	// Values for enhancement_raise_unit_cap.
 	UNIT_INDEX_MAX_RAISED = 150,
