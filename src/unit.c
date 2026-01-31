@@ -346,7 +346,7 @@ static void Unit_MovementTick(Unit *unit)
 	unit->speedRemainder = speed & 0xFF;
 }
 
-// Replica
+// Replica Count unit function
 static uint16 Unit_CountUnits(enum HouseType houseID, enum UnitType unit_type) {
 	uint16 count = 0;
 	PoolFindStruct find;
@@ -375,8 +375,7 @@ void GameLoop_Unit(void)
 	bool tickUnknown5  = false;
 	bool tickDeviation = false;
 
-	// replica
-	// Count the player harvestors on the map and equal them
+	// replica Sandworm create Count the player harvestors on the map and equal them
 	const int harvestor_count = Unit_CountUnits(g_playerHouseID, UNIT_HARVESTER);
 	
 	// Harvestor count is more than 3 smash the map with worms
@@ -385,7 +384,8 @@ void GameLoop_Unit(void)
 			
 		if (worm_count < harvestor_count) {
 			Unit *unit = Unit_CreateWrapper(HOUSE_FREMEN, UNIT_SANDWORM, 0);
-			// Replica create sandworms to hunt always
+			
+			// Replica Sandworm default is hunt mode
 			if (unit && unit->o.type == UNIT_SANDWORM) {
 				Unit_Server_SetAction(unit, ACTION_HUNT);
 			}
@@ -1259,7 +1259,7 @@ Unit *Unit_FindBestTargetUnit(Unit *u, uint16 mode)
 			target != NULL;
 			target = Unit_FindNext(&find)) {
 		
-		// Replica DONT let them kill my precioius sandworms ever
+		// Replica AI Shouldnt attack sandworms let them kill my precioius sandworms ever
 		if (target->o.type == UNIT_SANDWORM && Unit_GetHouseID(u) != g_playerHouseID ) {
 			continue;
 		}
@@ -1310,10 +1310,14 @@ static uint16 Unit_Sandworm_GetTargetPriority(Unit *unit, Unit *target)
 	 * territory.  Presumably this was done to prevent sandworms
 	 * attacking stationary CPU units, and out-of-sight worm attacks.
 	 */
+
+	// REPLICA Allow the sandworms to do whatever they want
+	/*
 	if (g_host_type == HOSTTYPE_NONE) {
 		if (!Map_IsPositionUnveiled(g_playerHouseID, packed))
 			return 0;
 	}
+	*/
 
 	switch(g_table_unitInfo[target->o.type].movementType) {
 		case MOVEMENT_FOOT:      res = 0x64;   break;
@@ -1347,8 +1351,7 @@ Unit *Unit_Sandworm_FindBestTarget(Unit *unit)
 
 	if (unit == NULL) return NULL;
 
-	// REPLICA
-	// Harvestor count
+	// Replica Harvestor count for sandworm
 	PoolFindStruct findMe;
 	uint16 count = 0;
 	Unit *lastUnit = NULL;
@@ -1365,7 +1368,7 @@ Unit *Unit_Sandworm_FindBestTarget(Unit *unit)
 			u != NULL;
 			u = Unit_FindNext(&find)) {
 
-		// Replica dont attach things that are guarding
+		// Replica dont attack AI things that are area guarding
 		if (u->actionID == ACTION_AREA_GUARD && Unit_GetHouseID(u) != g_playerHouseID) continue;
 	    // Replica dont attack ai controlled harvesters because they are shiny and nice :)
 		if (Unit_GetHouseID(u) != g_playerHouseID && u->o.type == UNIT_HARVESTER) continue;

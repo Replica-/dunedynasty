@@ -165,7 +165,7 @@ Unit_Allocate(uint16 index, enum UnitType type, enum HouseType houseID)
 
 		// Replica -- WHO CARES ABOUT UNIT MAXES FOR CPU LET THEM BUILD!
 		if ((g_validateStrictIfZero == 0)
-				&& ((h->unitCount >= h->unitCountMax) && (houseID != g_playerHouseID))) {
+				&& ((h->unitCount >= h->unitCountMax) && (houseID == g_playerHouseID))) {
 			if (ui->movementType != MOVEMENT_WINGER
 			 && ui->movementType != MOVEMENT_SLITHER) {
 				return NULL;

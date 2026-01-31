@@ -322,8 +322,8 @@ StructureAI_RemapBuildItem(int index, uint16 *priority)
 		{  55, UNIT_RAIDER_TRIKE },
 		{  60, UNIT_QUAD },
 
-		/* Chance of creating harvester if required. */
-		{  10, UNIT_HARVESTER },    /* at most 2 or 3. */
+		/* Chance of creating harvester if required. Always create these */
+		{  200, UNIT_HARVESTER },    /* at most 2 or 3. */
 
 		{  10, UNIT_MCV }           /* never built. */
 	};
@@ -395,7 +395,6 @@ StructureAI_PickNextToBuild(const Structure *s)
 	uint16 type = 0xFFFF;
 	uint16 priority_type = 0;
 
-	// REPLICA
 	for (int j = 0; j < UNIT_MAX; j++) {
 		uint16 priority_i;
 		uint16 i;

@@ -59,8 +59,6 @@ void GameLoop_House(void)
 	bool tickStarportAvailability = false;
 	bool tickSuperWeaponReadyMessage = false;
 
-	// Replica
-
 	if (g_tickHouseHouse <= g_timerGame) {
 		tickHouse = true;
 		g_tickHouseHouse = g_timerGame + 900;
@@ -135,7 +133,6 @@ void GameLoop_House(void)
 		Unit *nu = NULL;
 		int i;
 
-		// Replica
 		for (i = 0; i < 17; i++) {
 			uint16 locationID;
 			bool deployed;

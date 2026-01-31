@@ -227,7 +227,7 @@ void GameLoop_Structure(void)
 
 					buildCost = oi->buildCredits * 256 / oi->buildTime;
 
-					/* For brutal AI, half production cost. */ // This shoulpd scale down in each campaign id // Replica
+					// Replica: COSTS 
 					if (AI_IsBrutalAI(s->o.houseID)) {
 						buildCost = buildSpeed * buildCost / (1.25*256);
 					} else if (buildSpeed < 256) {
@@ -1733,9 +1733,8 @@ bool Structure_Server_BuildObject(Structure *s, uint16 objectType)
 
 	if (s->o.type == STRUCTURE_STARPORT) return true;
 
-	// Replica not sure whats going on here
-	//if (s->objectType != objectType)
-	//	Structure_Server_CancelBuild(s);
+	if (s->objectType != objectType)
+		Structure_Server_CancelBuild(s);
 
 	if (s->o.linkedID != 0xFF || objectType == 0xFFFF) return false;
 

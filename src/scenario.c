@@ -1264,11 +1264,7 @@ static void Scenario_Load_Structure(const char *key, char *settings)
 		structureType = Structure_StringToType(settings);
 		if (structureType == STRUCTURE_INVALID) return;
 
-		// REPLICA REFINERY
 		Structure_Create(STRUCTURE_INDEX_INVALID, structureType, houseType, position);
-		if ((structureType == STRUCTURE_REFINERY) && (houseType != g_playerHouseID)) {
-			Unit_CreateWrapper(houseType, UNIT_HARVESTER, 7);
-		}
 		return;
 	}
 
@@ -1639,7 +1635,6 @@ bool Scenario_Load(uint16 scenarioID, uint8 houseID)
 	Sprites_LoadTiles();
 	Map_CreateLandscape(g_scenario.mapSeed, NULL, g_map);
 
-	// Replica
 	for (i = 0; i < 17; i++) {
 		g_scenario.reinforcement[i].unitID = UNIT_INDEX_INVALID;
 	}

@@ -1865,7 +1865,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* shortcut             */ 0
 	},
 
-	{ /* 25 */ // REPLICA
+	{ /* 25 */ // REPLICA SANDWORM
 		{ /* objectInfo */
 		/* stringID_abbrev      */ STR_SANDWORM,
 		/* name                 */ "Sandworm",
@@ -1887,7 +1887,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* priority             */ true
 		},
 		/* spawnChance          */ 0,
-		/* hitpoints            */ 400,
+		/* hitpoints            */ 500,
 		/* fogUncoverRadius     */ 0,
 		/* spriteID             */ SHAPE_SANDWORM,
 		/* buildCredits         */ 0,
@@ -1903,7 +1903,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* priorityTarget       */ 0,
 		/* availableHouse       */ FLAG_HOUSE_FREMEN,
 		},
-		//Replica
+		//Replica SANDWORM+6
 		/* indexStart           */ 109,
 		/* indexEnd             */ 120,
 		{ /* flags */

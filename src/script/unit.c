@@ -667,11 +667,11 @@ uint16 Script_Unit_Fire(ScriptEngine *script)
 
 			Unit_UpdateMap(1, u);
 
-			// replica
+			// replica SANDWORM JUST KILL THEM AFTER THEY EAT
 			//if (!enhancement_insatiable_sandworms)
 			u->amount--;
 
-			// Replica 
+			// Replica SANDWORM EAT DELAY
 			script->delay = 2000;
 
 			if ((int8)u->amount < 1) {

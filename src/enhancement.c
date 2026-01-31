@@ -171,7 +171,6 @@ bool enhancement_play_additional_voices = true;
  * This will always be active with skirmish/multiplayer.
  */
 
-// REplica
 bool enhancement_raise_unit_cap = true;
 
 /**
