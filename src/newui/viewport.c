@@ -293,18 +293,19 @@ Viewport_Server_Place(House *h, Structure *s, uint16 packed)
 			h->palacePosition = s->o.position;
 
 		if (g_validateStrictIfZero == 0 && s->o.type == STRUCTURE_REFINERY) {
-			Unit *u;
+			//Unit *u;
 
 			// Replica
 			// g_validateStrictIfZero++;
 			// u = Unit_CreateWrapper(houseID, UNIT_HARVESTER, Tools_Index_Encode(s->o.index, IT_STRUCTURE));
 			// g_validateStrictIfZero--;
-
+/*
 			if (u == NULL) {
 				// h->harvestersIncoming++;
 			} else {
-				u->originEncoded = Tools_Index_Encode(s->o.index, IT_STRUCTURE);
+				//u->originEncoded = Tools_Index_Encode(s->o.index, IT_STRUCTURE);
 			}
+				*/
 		}
 
 		Structure_Server_BuildObject(s, 0xFFFE);

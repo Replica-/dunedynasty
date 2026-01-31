@@ -1733,8 +1733,9 @@ bool Structure_Server_BuildObject(Structure *s, uint16 objectType)
 
 	if (s->o.type == STRUCTURE_STARPORT) return true;
 
-	if (s->objectType != objectType)
-		Structure_Server_CancelBuild(s);
+	// Replica not sure whats going on here
+	//if (s->objectType != objectType)
+	//	Structure_Server_CancelBuild(s);
 
 	if (s->o.linkedID != 0xFF || objectType == 0xFFFF) return false;
 
