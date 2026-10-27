@@ -38,6 +38,7 @@
 #include "../newui/menu.h"
 #include "../newui/menubar.h"
 #include "../newui/savemenu.h"
+#include "../newui/viewport.h"
 #include "../opendune.h"
 #include "../pool/pool.h"
 #include "../pool/pool_house.h"
@@ -1648,9 +1649,26 @@ GUI_String_Get_ByIndex(int16 stringID)
 				break;
 			}
 
-		case -12: stringID = speedStrings[g_gameConfig.gameSpeed]; break;
-		case -13: onoff = g_gameConfig.hints; break;
+		case -12: stringID = speedStrings[g_gameConfig.gameSpeed]; break;		case -13: onoff = g_gameConfig.hints; break;
 		case -14: onoff = g_enable_subtitles; break;
+
+		case -15: {
+			const char *paletteNames[] = {
+				"Harkonnen", "Atreides", "Ordos", "Fremen", "Sardaukar", "Mercenary", "Default", "Custom"
+			};
+			if (g_gameConfig.houseColorPalette < 8)
+				return paletteNames[g_gameConfig.houseColorPalette];
+			return "Unknown";
+		}
+
+		case -35: {
+			const char *paletteNames[] = {
+				"Harkonnen", "Atreides", "Ordos", "Fremen", "Sardaukar", "Mercenary", "Default", "Custom"
+			};
+			if (g_gameConfig.houseColorPalette < 8)
+				return paletteNames[g_gameConfig.houseColorPalette];
+			return "Unknown";
+		}
 
 		case -50: return (g_gameConfig.leftClickOrders) ? "Left-click" : "Right-click";
 		case -51: return (g_gameConfig.holdControlToZoom) ? "Scroll sidebar" : "Zoom viewport";
@@ -2030,6 +2048,9 @@ GUI_HallOfFame_Show(enum HouseType houseID, uint16 score)
 
 	w = GUI_HallOfFame_CreateButtons(data);
 
+	
+
+
 	/* Disable the clear button if no scores. */
 	if (data[0].score == 0) {
 		GUI_Widget_MakeInvisible(GUI_Widget_Get_ByIndex(w, 100));
@@ -2199,6 +2220,20 @@ uint16 GUI_HallOfFame_DrawData(HallOfFameStruct *data, bool show)
  */
 void GUI_Palette_CreateRemap(uint8 houseID)
 {
+	const uint8 remapHouse = (houseID == g_playerHouseID && g_gameConfig.houseColorPalette < 6)
+		? g_gameConfig.houseColorPalette
+		: houseID;
+
+	GUI_Palette_CreateRemapColour(remapHouse);
+}
+
+/**
+ * Create the remap palette using the colours of the given house,
+ * ignoring the player's house colour option.
+ * @param remapHouse The house whose colours are used.
+ */
+void GUI_Palette_CreateRemapColour(uint8 remapHouse)
+{
 	int16 i;
 	int16 loc4;
 	int16 loc6;
@@ -2211,7 +2246,7 @@ void GUI_Palette_CreateRemap(uint8 houseID)
 		loc6 = i / 16;
 		loc4 = i % 16;
 		if (loc6 == 9 && loc4 <= 6) {
-			*remap = (houseID << 4) + 0x90 + loc4;
+			*remap = (remapHouse << 4) + 0x90 + loc4;
 		}
 	}
 }

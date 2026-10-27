@@ -21,7 +21,8 @@ bool enhancement_ai_respects_structure_placement = true;
  * Various AI changes to make the game tougher.  Includes double
  * production rate, half cost, flanking attacks, etc.
  */
-bool enhancement_brutal_ai = false;
+/* Replica hard mode: always on, not configurable. */
+bool enhancement_brutal_ai = true;
 
 /**
  * In Dune II, construction automatically goes on hold when you run
@@ -170,7 +171,8 @@ bool enhancement_play_additional_voices = true;
  * and indexEnd of all ground units (incl. saboteurs) to allow a total of 300.
  * This will always be active with skirmish/multiplayer.
  */
-bool enhancement_raise_unit_cap = false;
+
+bool enhancement_raise_unit_cap = true;
 
 /**
  * Dune II limits total structures on a map to about 70.

@@ -1,0 +1,87 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "UCRT64 Build",
+      "type": "cppvsdbg", // Or "cmake" or appropriate debugger type
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "cmd",
+      "args": [
+        "/c",
+        "D:\\development\\msys64\\msys2_shell.cmd",
+        "-ucrt64",
+        "-defterm",
+        "-no-start","-here",
+        "-c",
+        "cd /d/development/dunedynasty/ && bash /d/development/dunedynasty/scripts/build-debug-windows-x64.sh"
+      ]
+    },
+    {
+      "name": "Debug",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    },
+    {
+      "name": "Build + Debug",
+      "type": "cppdbg",
+      "request": "launch",
+      "preLaunchTask": "UCRT64 Build",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    },
+    {
+      "name": "Debug: Mission 5 Atreides",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "9"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    },
+    {
+      "name": "Build + Debug: Mission 10 Atreides",
+      "type": "cppdbg",
+      "request": "launch",
+      "preLaunchTask": "UCRT64 Build",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "9"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ]
+    }
+  ]
+}

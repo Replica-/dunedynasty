@@ -59,8 +59,6 @@ void GameLoop_House(void)
 	bool tickStarportAvailability = false;
 	bool tickSuperWeaponReadyMessage = false;
 
-	if (g_debugScenario) return;
-
 	if (g_tickHouseHouse <= g_timerGame) {
 		tickHouse = true;
 		g_tickHouseHouse = g_timerGame + 900;
@@ -83,7 +81,7 @@ void GameLoop_House(void)
 
 	if (g_tickHouseReinforcement <= g_timerGame) {
 		tickReinforcement = true;
-		g_tickHouseReinforcement = g_timerGame + (g_debugGame ? 60 : 600);
+		g_tickHouseReinforcement = g_timerGame + (g_debugGame ? 600 : 600);
 	}
 
 	if (g_tickHouseMissileCountdown <= g_timerGame) {
@@ -135,7 +133,7 @@ void GameLoop_House(void)
 		Unit *nu = NULL;
 		int i;
 
-		for (i = 0; i < 16; i++) {
+		for (i = 0; i < 17; i++) {
 			uint16 locationID;
 			bool deployed;
 			Unit *u;

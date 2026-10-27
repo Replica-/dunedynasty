@@ -1225,7 +1225,11 @@ Scenario_Create_Unit(enum HouseType houseType, enum UnitType unitType,
 
 	/* XXX -- There is no way this is ever possible, as the beingBuilt flag is unset by Unit_Allocate() */
 	if (!u->o.flags.s.isNotOnMap)
-		Unit_Server_SetAction(u, u->actionID);
+		// @REplica no point in sending a unit for ambush if its just going to die, but the starter levels you kinda expect kamikaze
+		if (u->actionID == ACTION_AMBUSH && unitType != UNIT_SANDWORM && g_campaignID > 2)
+			Unit_Server_SetAction(u, ACTION_AREA_GUARD);
+		else
+			Unit_Server_SetAction(u, u->actionID);
 
 	u->o.seenByHouses = 0x00;
 
@@ -1631,7 +1635,7 @@ bool Scenario_Load(uint16 scenarioID, uint8 houseID)
 	Sprites_LoadTiles();
 	Map_CreateLandscape(g_scenario.mapSeed, NULL, g_map);
 
-	for (i = 0; i < 16; i++) {
+	for (i = 0; i < 17; i++) {
 		g_scenario.reinforcement[i].unitID = UNIT_INDEX_INVALID;
 	}
 
