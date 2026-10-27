@@ -43,6 +43,7 @@
 #include "../table/sound.h"
 #include "../timer/timer.h"
 #include "../video/video.h"
+#include "../video/video_a5.h"
 #include "../wsa.h"
 
 enum {
@@ -1336,9 +1337,28 @@ Menu_Run(void)
 		curr_menu = next_menu = MENU_PLAY_A_GAME;
 	}
 
+	/* --test-confirm-house: show the screen where a house has been picked. */
+	if (g_debugTestColourMenu == 3) {
+		g_campaign_selected = CAMPAIGNID_DUNE_II;
+		g_playerHouseID = HOUSE_ATREIDES;
+		String_ReloadCampaignStrings();
+		curr_menu = next_menu = MENU_CONFIRM_HOUSE;
+	}
+
 	al_flush_event_queue(g_a5_input_queue);
 
+	int test_frames = 0;
+
 	while (curr_menu != MENU_EXIT_GAME) {
+		if (g_debugTestColourMenu == 3) {
+			test_frames++;
+
+			if (test_frames == 150)
+				VideoA5_CaptureScreenshot();
+			else if (test_frames == 220)
+				exit(0);
+		}
+
 		/* Initialise. */
 		if (initialise_menu) {
 			initialise_menu = false;

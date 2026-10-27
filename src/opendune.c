@@ -670,7 +670,10 @@ int main(int argc, char **argv)
 			g_debugTestColourMenu = 1;
 
 		if (strcmp(argv[i], "--test-mentat") == 0)
-			g_debugTestColourMenu = 2;	}
+			g_debugTestColourMenu = 2;
+
+		if (strcmp(argv[i], "--test-confirm-house") == 0)
+			g_debugTestColourMenu = 3;	}
 
 	for (int i = 1; i + 1 < argc; i++) {
 		if (strcmp(argv[i], "--colour") == 0 || strcmp(argv[i], "--color") == 0) {

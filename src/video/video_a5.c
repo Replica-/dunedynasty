@@ -1457,11 +1457,11 @@ VideoA5_MakeMentatFrame(ALLEGRO_BITMAP *src)
 
 	/* The light line around the screen, with the medium layer beyond it. */
 	const bool valid
-		= SRC_PIXEL(MENTAT_FRAME_RIGHT, 100)[0] > 120
-		&& SRC_PIXEL(MENTAT_FRAME_RIGHT + 1, 100)[0] > 40 && SRC_PIXEL(MENTAT_FRAME_RIGHT + 1, 100)[0] < 100
+		= SRC_PIXEL(MENTAT_FRAME_RIGHT, 100)[0] > 80
+		&& SRC_PIXEL(MENTAT_FRAME_RIGHT + 1, 100)[0] > 10 && SRC_PIXEL(MENTAT_FRAME_RIGHT + 1, 100)[0] < 100
 		&& SRC_PIXEL(MENTAT_FRAME_RIGHT - 1, 100)[0] < 10
-		&& SRC_PIXEL(200, MENTAT_FRAME_TOP)[0] > 120
-		&& SRC_PIXEL(200, MENTAT_FRAME_BOTTOM)[0] > 120;
+		&& SRC_PIXEL(200, MENTAT_FRAME_TOP)[0] > 80
+		&& SRC_PIXEL(200, MENTAT_FRAME_BOTTOM)[0] > 80;
 
 	ALLEGRO_BITMAP *overlay = NULL;
 
@@ -1544,6 +1544,31 @@ VideoA5_GetMentatFrame(ALLEGRO_BITMAP *src)
 	return s_mentatFrame[free_slot].overlay;
 }
 
+/* For pictures that are not laid out like the standard mentat screens (the
+ * Bene Gesserit, Fremen, Sardaukar and Mercenary ones, and those of custom
+ * campaigns), the bar on the right is made by stretching the last column of
+ * the picture outwards and fading it to black, as there is no wall to continue.
+ */
+static void
+VideoA5_DrawEdgeFade(ALLEGRO_BITMAP *bmp, float w, float h, float right)
+{
+	const int slices = 24;
+	const float length = min(right, w);
+
+	if (length < 0.5f)
+		return;
+
+	const float sw = length / slices;
+
+	for (int i = 0; i < slices; i++) {
+		const float t = (i + 0.5f) / slices;
+		const float c = 0.75f * (1.0f - t) * (1.0f - t);
+		const ALLEGRO_COLOR tint = al_map_rgba_f(c, c, c, 1.0f);
+
+		/* The last column of the picture, stretched out. */
+		al_draw_tinted_scaled_bitmap(bmp, tint, w - 1, 0, 1, h, w + i * sw, 0, sw, h, 0);
+	}
+}
 /* Draw a full-screen CPS picture, and fill the empty bars that a window of
  * another shape than 4:3 leaves around it.  Where the picture is a mentat
  * screen, the TV frame is first completed on the right, and then a wall is
@@ -1568,6 +1593,13 @@ VideoA5_DrawCPSFill(enum SearchDirectory dir, const char *filename)
 	const float w = al_get_bitmap_width(cps->bmp);
 	const float h = al_get_bitmap_height(cps->bmp);
 
+	if (getenv("DD_DUMP_CPS") != NULL) {
+		char name[128];
+
+		snprintf(name, sizeof(name), "cps_dump_%s.png", filename);
+		al_save_bitmap(name, cps->bmp);
+	}
+
 	/* The bars, in the units of the picture. */
 	const float left = div->x / div->scalex;
 	const float top = div->y / div->scaley;
@@ -1577,19 +1609,67 @@ VideoA5_DrawCPSFill(enum SearchDirectory dir, const char *filename)
 	/* A little darker than the picture, as it is further from the light. */
 	const ALLEGRO_COLOR tint = al_map_rgba_f(0.85f, 0.85f, 0.85f, 1.0f);
 
+	ALLEGRO_BITMAP *frame = VideoA5_GetMentatFrame(cps->bmp);
+
+	/* Pictures that are not laid out like the standard mentat screens just fade out. */
+	if (frame == NULL) {
+		al_draw_bitmap(cps->bmp, 0, 0, 0);
+		VideoA5_DrawEdgeFade(cps->bmp, w, h, right);
+		return;
+	}
+
+	/* The Bene Gesserit picture has hair in the top band at its left, so only the clean
+	 * part of the band is used (a whole number of the 20 pixel repeats of its pattern).
+	 */
+	float srcX = 0.0f;
+	float srcW = w;
+
+	const bool bricks = (strstr(filename, "MENTATM") != NULL);
+
+	if (bricks) {
+		srcX = 140.0f;
+		srcW = 160.0f;
+	}
+
 	/* Side bars: the band repeated down the bar at its true size. */
 	for (int side = 0; side < 2; side++) {
 		const float bar = (side == 0) ? left : right;
 		const float x0 = (side == 0) ? -left : w;
 
-		for (float x = 0.0f; x < bar - 0.01f; x += w) {
-			const float tw = min(w, bar - x);
+		/* The Bene Gesserit picture's right bar: the top strip and the bottom strip carried on
+		 * across, and the bricks from the far left of the picture in between.
+		 */
+		if (bricks && side == 1) {
+			const float stripTop = 24.0f;      /* The top strip is rows 0..23, ... */
+			const float stripBottom = 175.0f;  /* ... the bottom one 175.. */
+			const float brickW = 22.0f;        /* A brick tile: x 0..21, y 24..63. */
+			const float brickH = 40.0f;
+
+			for (float x = 0.0f; x < bar - 0.01f; x += srcW) {
+				const float tw = min(srcW, bar - x);
+
+				al_draw_tinted_bitmap_region(cps->bmp, tint, srcX, 0, tw, stripTop, x0 + x, 0, 0);
+				al_draw_tinted_bitmap_region(cps->bmp, tint, srcX, stripBottom, tw, h - stripBottom, x0 + x, stripBottom, 0);
+			}
+
+			for (float x = 0.0f; x < bar - 0.01f; x += brickW) {
+				for (float y = stripTop; y < stripBottom - 0.01f; y += brickH)
+					al_draw_tinted_bitmap_region(cps->bmp, tint, 0, stripTop,
+						min(brickW, bar - x), min(brickH, stripBottom - y), x0 + x, y, 0);
+			}
+
+			continue;
+		}
+
+		for (float x = 0.0f; x < bar - 0.01f; x += srcW) {
+			const float tw = min(srcW, bar - x);
 
 			/* The left bar is tiled from the picture outwards. */
 			const float dx = (side == 0) ? x0 + bar - x - tw : x0 + x;
+			const float sx = (side == 0) ? srcX + srcW - tw : srcX;
 
 			for (float y = 0.0f; y < h; y += band)
-				al_draw_tinted_bitmap_region(cps->bmp, tint, 0, bandTop, tw, min(band, h - y), dx, y, 0);
+				al_draw_tinted_bitmap_region(cps->bmp, tint, sx, bandTop, tw, min(band, h - y), dx, y, 0);
 		}
 	}
 
@@ -1612,8 +1692,6 @@ VideoA5_DrawCPSFill(enum SearchDirectory dir, const char *filename)
 	float edge = w;
 
 	if (right > 0.5f) {
-		ALLEGRO_BITMAP *frame = VideoA5_GetMentatFrame(cps->bmp);
-
 		if (frame != NULL) {
 			al_draw_bitmap(frame, MENTAT_FRAME_RIGHT + 1, MENTAT_FRAME_TOP - MENTAT_FRAME_THICKNESS, 0);
 			edge = MENTAT_FRAME_RIGHT + 1 + MENTAT_FRAME_THICKNESS;
