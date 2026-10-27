@@ -1,9 +1,12 @@
 {
   "version": "0.2.0",
   "configurations": [
+
+    // ─────────────────────────  🔨 Build  ─────────────────────────
+
     {
-      "name": "UCRT64 Build",
-      "type": "cppvsdbg", // Or "cmake" or appropriate debugger type
+      "name": "🔨 Build (UCRT64)",
+      "type": "cppvsdbg",
       "request": "launch",
       "cwd": "${workspaceFolder}",
       "program": "cmd",
@@ -12,13 +15,54 @@
         "D:\\development\\msys64\\msys2_shell.cmd",
         "-ucrt64",
         "-defterm",
-        "-no-start","-here",
+        "-no-start", "-here",
         "-c",
         "cd /d/development/dunedynasty/ && bash /d/development/dunedynasty/scripts/build-debug-windows-x64.sh"
-      ]
+      ],
+      "presentation": { "group": "1 Build", "order": 1 }
+    },
+
+    // ─────────────────────  🧪 Regression tests  ─────────────────────
+    // Each --test-* scenario (colour menu, Previous, mentat screens, Death Hand,
+    // worms, ...) plays itself and quits.  A crash or hang fails only its own test.
+    // Screenshots and a summary go to %TEMP%\dd-regression.
+
+    {
+      "name": "🧪 Regression tests",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "powershell.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\regression-tests.ps1"],
+      "console": "externalTerminal",
+      "presentation": { "group": "2 Test", "order": 1 }
     },
     {
-      "name": "Debug",
+      "name": "🔨🧪 Build + Regression tests",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "preLaunchTask": "UCRT64 Build",
+      "cwd": "${workspaceFolder}",
+      "program": "powershell.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\regression-tests.ps1"],
+      "console": "externalTerminal",
+      "presentation": { "group": "2 Test", "order": 2 }
+    },
+    {
+      "name": "🐢 Regression tests (including slow ones)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "powershell.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\regression-tests.ps1", "-Slow"],
+      "console": "externalTerminal",
+      "presentation": { "group": "2 Test", "order": 3 }
+    },
+
+    // ───────────────────────  🐞 Debug the game  ───────────────────────
+
+    {
+      "name": "🐞 Debug",
       "type": "cppdbg",
       "request": "launch",
       "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
@@ -31,10 +75,11 @@
       "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
       "setupCommands": [
         { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
-      ]
+      ],
+      "presentation": { "group": "3 Debug", "order": 1 }
     },
     {
-      "name": "Build + Debug",
+      "name": "🔨🐞 Build + Debug",
       "type": "cppdbg",
       "request": "launch",
       "preLaunchTask": "UCRT64 Build",
@@ -48,10 +93,14 @@
       "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
       "setupCommands": [
         { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
-      ]
+      ],
+      "presentation": { "group": "3 Debug", "order": 2 }
     },
+
+    // ─────────────────  🏜️ Jump straight into a mission  ─────────────────
+
     {
-      "name": "Debug: Mission 5 Atreides",
+      "name": "🏜️ Debug: Mission 9 Atreides",
       "type": "cppdbg",
       "request": "launch",
       "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
@@ -64,10 +113,11 @@
       "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
       "setupCommands": [
         { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
-      ]
+      ],
+      "presentation": { "group": "4 Missions", "order": 1 }
     },
     {
-      "name": "Build + Debug: Mission 10 Atreides",
+      "name": "🔨🏜️ Build + Debug: Mission 9 Atreides",
       "type": "cppdbg",
       "request": "launch",
       "preLaunchTask": "UCRT64 Build",
@@ -81,7 +131,8 @@
       "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
       "setupCommands": [
         { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
-      ]
+      ],
+      "presentation": { "group": "4 Missions", "order": 2 }
     }
   ]
 }
