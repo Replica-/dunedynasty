@@ -1418,6 +1418,67 @@ VideoA5_DrawCPS(enum SearchDirectory dir, const char *filename)
 		al_draw_bitmap(cps->bmp, 0, 0, 0);
 }
 
+/* Draw a full-screen CPS picture, and fill the empty bars that a window of
+ * another shape than 4:3 leaves around it with a wall.  The wall is made at
+ * load time from the picture itself: a clean band of wall from the top of it
+ * is tiled across the bars (and stretched down the side bars), so that its
+ * panel seams carry on.  Nothing is stored or changed on disk.
+ */
+void
+VideoA5_DrawCPSFill(enum SearchDirectory dir, const char *filename)
+{
+	const float band = 26.0f;   /* Rows at the top of the picture that are just wall. */
+
+	CPSStore *cps = VideoA5_LoadCPS(dir, filename);
+
+	if (cps == NULL)
+		return;
+
+	const ScreenDiv *div = &g_screenDiv[SCREENDIV_MENU];
+	ALLEGRO_BITMAP *target = al_get_target_bitmap();
+	const float w = al_get_bitmap_width(cps->bmp);
+	const float h = al_get_bitmap_height(cps->bmp);
+
+	/* The bars, in the units of the picture. */
+	const float left = div->x / div->scalex;
+	const float top = div->y / div->scaley;
+	const float right = al_get_bitmap_width(target) / div->scalex - w - left;
+	const float bottom = al_get_bitmap_height(target) / div->scaley - h - top;
+
+	/* A little darker than the picture, as it is further from the light. */
+	const ALLEGRO_COLOR tint = al_map_rgba_f(0.8f, 0.8f, 0.8f, 1.0f);
+
+	/* Side bars: the band, stretched to the height of the picture. */
+	for (int side = 0; side < 2; side++) {
+		const float bar = (side == 0) ? left : right;
+		const float x0 = (side == 0) ? -left : w;
+
+		for (float x = 0.0f; x < bar - 0.01f; x += w) {
+			const float tw = min(w, bar - x);
+
+			/* The left bar is tiled from the picture outwards. */
+			const float dx = (side == 0) ? x0 + bar - x - tw : x0 + x;
+
+			al_draw_tinted_scaled_bitmap(cps->bmp, tint, 0, 0, tw, band, dx, 0, tw, h, 0);
+		}
+	}
+
+	/* Tall windows: bars above and below, with the band as it is. */
+	for (int side = 0; side < 2; side++) {
+		const float bar = (side == 0) ? top : bottom;
+
+		for (float y = 0.0f; y < bar - 0.01f; y += band) {
+			const float th = min(band, bar - y);
+			const float dy = (side == 0) ? -(y + th) : h + y;
+
+			for (float x = -left; x < w + right; x += w)
+				al_draw_tinted_bitmap_region(cps->bmp, tint, 0, 0, min(w, w + right - x), th, x, dy, 0);
+		}
+	}
+
+	al_draw_bitmap(cps->bmp, 0, 0, 0);
+}
+
 void
 VideoA5_DrawCPSCoordinates(enum SearchDirectory dir, const char *filename, int dx, int dy)
 {

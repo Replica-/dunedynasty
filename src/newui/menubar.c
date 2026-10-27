@@ -478,6 +478,9 @@ MenuBar_ClickMentat(Widget *w)
 	const bool skip_advice = (g_campaign_selected == CAMPAIGNID_SKIRMISH);
 	Mentat_LoadHelpSubjects(scrollbar, true, SEARCHDIR_CAMPAIGN_DIR, g_playerHouseID, g_campaignID, skip_advice);
 
+	/* The mentat screen sits at the left of a widescreen window. */
+	A5_SetMenuAlignLeft(true);
+
 	Mouse_TransformToDiv(SCREENDIV_MENU, &g_mouseX, &g_mouseY);
 	return true;
 }
@@ -500,6 +503,8 @@ MenuBar_TickMentatOverlay(void)
 
 		free(g_widgetMentatScrollDown);
 		g_widgetMentatScrollDown = NULL;
+
+		A5_SetMenuAlignLeft(false);
 
 		g_gameOverlay = GAMEOVERLAY_NONE;
 		Timer_SetTimer(TIMER_GAME, true);
@@ -1249,14 +1254,19 @@ MenuBar_DebugTestColourMenu(void)
 	frames++;
 
 	if (state == 0 && frames > 240) {
-		Widget *radio;
+		if (g_debugTestColourMenu == 2) {
+			/* --test-mentat: the in-game Mentat screen. */
+			MenuBar_ClickMentat(NULL);
+		} else {
+			Widget *radio;
 
-		g_gameOverlay = GAMEOVERLAY_GAME_CONTROLS;
-		MenuBar_CreateGameControls();
+			g_gameOverlay = GAMEOVERLAY_GAME_CONTROLS;
+			MenuBar_CreateGameControls();
 
-		radio = GUI_Widget_Get_ByIndex(g_widgetLinkedListTail, 94);
-		if (radio != NULL)
-			MenuBar_ClickRadioButton(radio);
+			radio = GUI_Widget_Get_ByIndex(g_widgetLinkedListTail, 94);
+			if (radio != NULL)
+				MenuBar_ClickRadioButton(radio);
+		}
 
 		state = 1;
 		frames = 0;

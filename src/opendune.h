@@ -45,7 +45,7 @@ extern int    g_debugTestDeathHand; /* From --test-deathhand (1) or --test-death
 extern bool   g_debugTestSpice;     /* From --test-spice. */
 extern int    g_debugTestWorm;      /* From --test-worm (1), --test-worm-harvesters (2) or --test-worm-respawn (3). */
 extern bool   g_debugTestPanel;     /* From --test-panel. */
-extern bool   g_debugTestColourMenu; /* From --test-colour-menu. */
+extern int    g_debugTestColourMenu; /* From --test-colour-menu (1) or --test-mentat (2). */
 extern uint16 g_activeAction;
 extern bool   g_debugGame;
 extern bool   g_debugScenario;

@@ -1614,6 +1614,21 @@ Menu_Run(void)
 				break;
 		}
 
+		/* The mentat screens sit at the left of a widescreen window. */
+		switch (curr_menu & 0xFF) {
+			case MENU_CONFIRM_HOUSE:
+			case MENU_SECURITY:
+			case MENU_BRIEFING:
+			case MENU_BRIEFING_WIN:
+			case MENU_BRIEFING_LOSE:
+				A5_SetMenuAlignLeft(true);
+				break;
+
+			default:
+				A5_SetMenuAlignLeft(false);
+				break;
+		}
+
 		/* Menu transition. */
 		if ((curr_menu & 0xFF) != (res & 0xFF)) {
 			redraw = true;
@@ -1652,6 +1667,8 @@ Menu_Run(void)
 			curr_menu = (res & ~MENU_REDRAW);
 		}
 	}
+
+	A5_SetMenuAlignLeft(false);
 
 	Menu_Uninit();
 }
