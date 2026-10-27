@@ -1241,6 +1241,8 @@ MenuBar_TickConfirmation(enum GameOverlay overlay)
 	}
 }
 
+static int s_testPreviousFrames = 0;
+
 /* Debug test (--test-colour-menu): open the Game Controls menu on its last
  * page, with the house colour picker, and take a screenshot of it.  It counts
  * frames, as the game is not running while the menu is open.
@@ -1266,10 +1268,39 @@ MenuBar_DebugTestColourMenu(void)
 			radio = GUI_Widget_Get_ByIndex(g_widgetLinkedListTail, 94);
 			if (radio != NULL)
 				MenuBar_ClickRadioButton(radio);
+
+			if (getenv("DD_TEST_YELLOW") != NULL)
+				MenuBar_SetHouseColour(0xF0D020);
+
+			if (getenv("DD_TEST_PREVIOUS") != NULL) {
+				g_gameOverlay = GAMEOVERLAY_OPTIONS;
+				MenuBar_UninitGameControls();
+				GameLoop_TweakWidgetDimensions();
+				GUI_Window_Create(&g_optionsWindowDesc);
+				s_testPreviousFrames = 1;
+			}
+
+			if (getenv("DD_TEST_PRESET") != NULL) {
+				Widget *pw = GUI_Widget_Get_ByIndex(g_widgetLinkedListTail, 133);
+				const WidgetProperties *wi = &g_widgetProperties[pw->parentID];
+
+				g_mouseX = wi->xBase + pw->offsetX + HOUSE_COLOUR_PREVIEW_W + 6 + atoi(getenv("DD_TEST_PRESET")) * (HOUSE_COLOUR_PRESET_W + HOUSE_COLOUR_PRESET_GAP) + 2;
+				MenuBar_ClickHouseColourPresets(pw);
+			}
+
+			if (getenv("DD_TEST_PALETTE") != NULL) {
+				g_gameConfig.houseColorPalette = atoi(getenv("DD_TEST_PALETTE"));
+				GUI_Palette_CreateRemap(g_playerHouseID);
+				VideoA5_RebuildHousePalette(g_playerHouseID);
+				GUI_Palette_RemapScreen(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, g_screenActiveID, g_remap);
+			}
 		}
 
 		state = 1;
 		frames = 0;
+	} else if (state == 1 && getenv("DD_TEST_STRESS") != NULL && frames <= 200) {
+		/* Sweep through colours, as dragging a slider does. */
+		MenuBar_SetHouseColour(((frames * 5) << 16) | (((frames * 3) & 0xFF) << 8) | ((255 - frames) & 0xFF));
 	} else if (state == 1 && frames > 90) {
 		VideoA5_CaptureScreenshot();
 		state = 2;
@@ -1282,6 +1313,13 @@ MenuBar_DebugTestColourMenu(void)
 void
 MenuBar_TickOptionsOverlay(void)
 {
+	/* --test-colour-menu with DD_TEST_PREVIOUS: leave once the options menu has been up a while. */
+	if (s_testPreviousFrames > 0 && ++s_testPreviousFrames > 120) {
+		fprintf(stdout, "test: survived Previous\n");
+		fflush(stdout);
+		exit(0);
+	}
+
 	switch (g_gameOverlay) {
 		case GAMEOVERLAY_OPTIONS:
 			MenuBar_TickOptions();

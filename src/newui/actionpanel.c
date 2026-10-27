@@ -385,6 +385,20 @@ ActionPanel_GetLocateButton(void)
 	if (base == NULL)
 		return NULL;
 
+	/* Rebuilding the game widgets frees this one along with the rest, so if it
+	 * is no longer in the list the pointer is stale: make a new one.
+	 */
+	bool linked = false;
+	for (const Widget *w = g_widgetLinkedListHead; w != NULL; w = w->next) {
+		if (w == locate) {
+			linked = true;
+			break;
+		}
+	}
+
+	if (!linked)
+		locate = NULL;
+
 	if (locate == NULL) {
 		locate = GUI_Widget_Allocate(LOCATE_WIDGET_INDEX, 0, base->offsetX, base->offsetY, -2, STR_NULL);
 		locate->parentID = base->parentID;
@@ -399,7 +413,7 @@ ActionPanel_GetLocateButton(void)
 		locate->clickProc = NULL; /* Clicks come in through ActionPanel_HandleLocateKey. */
 	}
 
-	if (GUI_Widget_Get_ByIndex(g_widgetLinkedListHead, LOCATE_WIDGET_INDEX) != locate)
+	if (!linked)
 		g_widgetLinkedListHead = GUI_Widget_Link(g_widgetLinkedListHead, locate);
 
 	return locate;
