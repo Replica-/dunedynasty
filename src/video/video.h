@@ -74,6 +74,7 @@ extern void Video_DrawMinimap(int left, int top, int map_scale, enum MinimapDraw
 #define Video_Tick              VideoA5_Tick
 
 #define Video_DrawCPS                VideoA5_DrawCPS
+#define Video_DrawCPSFill            VideoA5_DrawCPSFill
 #define Video_DrawCPSRegion          VideoA5_DrawCPSRegion
 #define Video_DrawCPSSpecial         VideoA5_DrawCPSSpecial
 #define Video_DrawCPSSpecialScale    VideoA5_DrawCPSSpecialScale

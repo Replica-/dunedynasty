@@ -234,11 +234,12 @@ Mentat_DrawBackground(enum MentatID mentatID)
 	};
 	assert(mentatID < MENTAT_MAX);
 
+	/* The bars a widescreen window leaves are filled from the picture itself. */
 	if (mentatID == MENTAT_CUSTOM) {
-		Video_DrawCPS(SEARCHDIR_CAMPAIGN_DIR, background[g_playerHouseID]);
+		Video_DrawCPSFill(SEARCHDIR_CAMPAIGN_DIR, background[g_playerHouseID]);
 	} else {
 		const enum HouseType houseID = (mentatID == MENTAT_BENE_GESSERIT) ? HOUSE_MERCENARY : (enum HouseType)mentatID;
-		Video_DrawCPS(SEARCHDIR_GLOBAL_DATA_DIR, background[houseID]);
+		Video_DrawCPSFill(SEARCHDIR_GLOBAL_DATA_DIR, background[houseID]);
 	}
 }
 

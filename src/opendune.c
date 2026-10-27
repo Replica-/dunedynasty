@@ -89,7 +89,7 @@ int    g_debugTestDeathHand = 0;
 bool   g_debugTestSpice = false;
 int    g_debugTestWorm = 0;
 bool   g_debugTestPanel = false;
-bool   g_debugTestColourMenu = false;
+int    g_debugTestColourMenu = 0;
 uint16 g_activeAction = 0xFFFF;      /*!< Action the controlled unit will do. */
 
 bool   g_debugGame = true;        /*!< When true, you can control the AI. */
@@ -667,7 +667,10 @@ int main(int argc, char **argv)
 			g_debugTestPanel = true;
 
 		if (strcmp(argv[i], "--test-colour-menu") == 0)
-			g_debugTestColourMenu = true;	}
+			g_debugTestColourMenu = 1;
+
+		if (strcmp(argv[i], "--test-mentat") == 0)
+			g_debugTestColourMenu = 2;	}
 
 	for (int i = 1; i + 1 < argc; i++) {
 		if (strcmp(argv[i], "--colour") == 0 || strcmp(argv[i], "--color") == 0) {

@@ -60,6 +60,21 @@ A5_InitScreenDiv(ALLEGRO_BITMAP *parent, enum ScreenDivID divID,
 	}
 }
 
+static bool s_menuAlignLeft;
+
+/* Put the menu screen at the left of a widescreen window, instead of in the
+ * middle, as the mentat screens are (they fill the right with a wall).
+ */
+void
+A5_SetMenuAlignLeft(bool left)
+{
+	if (left == s_menuAlignLeft)
+		return;
+
+	s_menuAlignLeft = left;
+	A5_InitTransform(false);
+}
+
 void
 A5_InitTransform(bool screen_size_changed)
 {
@@ -90,7 +105,7 @@ A5_InitTransform(bool screen_size_changed)
 	} else if (aspect > preferred_aspect + 0.001) {
 		scale = (double)TRUE_DISPLAY_HEIGHT / (pixel_aspect_ratio * SCREEN_HEIGHT);
 		const double neww = scale * SCREEN_WIDTH;
-		offx = (TRUE_DISPLAY_WIDTH - neww) / 2;
+		offx = s_menuAlignLeft ? 0.0f : (TRUE_DISPLAY_WIDTH - neww) / 2;
 	}
 
 	ALLEGRO_BITMAP *target = s_transform[SCREENDIV_MAIN];

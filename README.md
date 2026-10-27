@@ -48,6 +48,12 @@ __Unit panel__
 - A "Unit Stats" section below the command buttons shows the selected unit's damage, range, sight, speed and cost, in the style of the structure info boxes (only the rows that fit are drawn)
 - For an enemy unit, a "Target" button under the stats shows what it is aiming at (a red line and target marker) or, if it has nothing to shoot at, where it is moving to (yellow); it stays on while the unit is selected, and the button then reads "Hide". `--test-panel` takes screenshots of the panel
 
+__Mentat screens__
+
+- On a widescreen window the mentat screens (the in-game Mentat and the mission briefings) are no longer a 4:3 picture in the middle of black bars: the mentat sits at the left, the TV frame that the picture cuts off is completed on the right (the layers of its top and bottom bars are turned into the right bar, with mitred corners), and the rest of the window is filled with the wall pattern. All of it is made while the game runs, from the game's own `MENTAT*.CPS` picture, so nothing is stored or changed. Mentat pictures of custom campaigns that are not laid out like the originals only get the wall. `--test-mentat` takes a screenshot of the in-game Mentat
+
+![Mentat screen on a widescreen window](/docs/fork-mentat-widescreen.png)
+
 __Controls__
 
 - WASD pans the camera (hold Shift to pan faster), at the configured scroll speed

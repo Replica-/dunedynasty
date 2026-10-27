@@ -1418,6 +1418,224 @@ VideoA5_DrawCPS(enum SearchDirectory dir, const char *filename)
 		al_draw_bitmap(cps->bmp, 0, 0, 0);
 }
 
+/* The mentat screens show a TV in a beveled frame, which the picture cuts off
+ * at its right edge.  These are the pixel positions in the picture of the
+ * light line around the screen, and the thickness of the frame beyond it.
+ */
+#define MENTAT_FRAME_RIGHT      312
+#define MENTAT_FRAME_TOP        47
+#define MENTAT_FRAME_BOTTOM     160
+#define MENTAT_FRAME_THICKNESS  24
+
+static struct {
+	ALLEGRO_BITMAP *src;
+	ALLEGRO_BITMAP *overlay;
+} s_mentatFrame[8];
+
+/* Build the missing right side of the frame, from the picture itself: the
+ * layers of the frame are the same all the way round, so the rows of the top
+ * bar (and of the bottom bar, for the bottom corner) are turned into columns
+ * for the right bar, and meet the other bars in mitred corners.  It is made
+ * once, at load time.  Returns NULL if the picture is not laid out like the
+ * Dune II mentat screens (e.g. a custom campaign's).
+ */
+static ALLEGRO_BITMAP *
+VideoA5_MakeMentatFrame(ALLEGRO_BITMAP *src)
+{
+	const int top = MENTAT_FRAME_TOP - MENTAT_FRAME_THICKNESS;       /* Outermost row of the top bar. */
+	const int rows = MENTAT_FRAME_THICKNESS * 2 + (MENTAT_FRAME_BOTTOM - MENTAT_FRAME_TOP) + 1;
+	const int x0 = MENTAT_FRAME_RIGHT + 1;                           /* First column beyond the screen. */
+
+	if (al_get_bitmap_width(src) != 320 || al_get_bitmap_height(src) != 200)
+		return NULL;
+
+	ALLEGRO_LOCKED_REGION *in = al_lock_bitmap(src, ALLEGRO_PIXEL_FORMAT_ABGR_8888_LE, ALLEGRO_LOCK_READONLY);
+	if (in == NULL)
+		return NULL;
+
+#define SRC_PIXEL(x, y) (&((const unsigned char *)in->data)[in->pitch * (y) + in->pixel_size * (x)])
+
+	/* The light line around the screen, with the medium layer beyond it. */
+	const bool valid
+		= SRC_PIXEL(MENTAT_FRAME_RIGHT, 100)[0] > 120
+		&& SRC_PIXEL(MENTAT_FRAME_RIGHT + 1, 100)[0] > 40 && SRC_PIXEL(MENTAT_FRAME_RIGHT + 1, 100)[0] < 100
+		&& SRC_PIXEL(MENTAT_FRAME_RIGHT - 1, 100)[0] < 10
+		&& SRC_PIXEL(200, MENTAT_FRAME_TOP)[0] > 120
+		&& SRC_PIXEL(200, MENTAT_FRAME_BOTTOM)[0] > 120;
+
+	ALLEGRO_BITMAP *overlay = NULL;
+
+	if (valid)
+		overlay = al_create_bitmap(MENTAT_FRAME_THICKNESS, rows);
+
+	ALLEGRO_LOCKED_REGION *out = NULL;
+	if (overlay != NULL)
+		out = al_lock_bitmap(overlay, ALLEGRO_PIXEL_FORMAT_ABGR_8888_LE, ALLEGRO_LOCK_WRITEONLY);
+
+	if (out == NULL) {
+		al_unlock_bitmap(src);
+		al_destroy_bitmap(overlay);
+		return NULL;
+	}
+
+	for (int oy = 0; oy < rows; oy++) {
+		for (int ox = 0; ox < MENTAT_FRAME_THICKNESS; ox++) {
+			const int x = x0 + ox;
+			const int y = top + oy;
+
+			/* How many layers out from the screen, on each side. */
+			const int lr = x - MENTAT_FRAME_RIGHT;
+			const int lt = (y < MENTAT_FRAME_TOP) ? MENTAT_FRAME_TOP - y : 0;
+			const int lb = (y > MENTAT_FRAME_BOTTOM) ? y - MENTAT_FRAME_BOTTOM : 0;
+
+			const unsigned char *s;
+
+			if (lr >= lt && lr >= lb) {
+				/* Right bar: a row of the top bar, turned into a column. */
+				const int along = 150 + (((y - 150) % 100) + 100) % 100;
+				s = SRC_PIXEL(along, MENTAT_FRAME_TOP - lr);
+			} else if (lt >= lb) {
+				const int along = 150 + (((x - 150) % 100) + 100) % 100;
+				s = SRC_PIXEL(along, MENTAT_FRAME_TOP - lt);
+			} else {
+				/* The bottom bar, from the part that the mentat does not cover. */
+				const int along = 170 + (((x - 170) % 100) + 100) % 100;
+				s = SRC_PIXEL(along, MENTAT_FRAME_BOTTOM + lb);
+			}
+
+			unsigned char *d = &((unsigned char *)out->data)[out->pitch * oy + out->pixel_size * ox];
+
+			d[0] = s[0];
+			d[1] = s[1];
+			d[2] = s[2];
+			d[3] = 0xFF;
+		}
+	}
+
+#undef SRC_PIXEL
+
+	al_unlock_bitmap(overlay);
+	al_unlock_bitmap(src);
+	return overlay;
+}
+
+static ALLEGRO_BITMAP *
+VideoA5_GetMentatFrame(ALLEGRO_BITMAP *src)
+{
+	int free_slot = -1;
+
+	for (int i = 0; i < (int)lengthof(s_mentatFrame); i++) {
+		if (s_mentatFrame[i].src == src)
+			return s_mentatFrame[i].overlay;
+
+		if (s_mentatFrame[i].src == NULL && free_slot < 0)
+			free_slot = i;
+	}
+
+	/* Not made yet (or no room, in which case the oldest is replaced). */
+	if (free_slot < 0) {
+		free_slot = 0;
+		al_destroy_bitmap(s_mentatFrame[0].overlay);
+	}
+
+	s_mentatFrame[free_slot].src = src;
+	s_mentatFrame[free_slot].overlay = VideoA5_MakeMentatFrame(src);
+
+	return s_mentatFrame[free_slot].overlay;
+}
+
+/* Draw a full-screen CPS picture, and fill the empty bars that a window of
+ * another shape than 4:3 leaves around it.  Where the picture is a mentat
+ * screen, the TV frame is first completed on the right, and then a wall is
+ * built to fill the rest, from a band of the picture's own wall that is
+ * repeated at its true size (its seams run the whole height of the band, so
+ * they carry on from one repeat to the next).  All of it is made at load
+ * time from the picture itself, so nothing is stored or changed on disk.
+ */
+void
+VideoA5_DrawCPSFill(enum SearchDirectory dir, const char *filename)
+{
+	const float band = 20.0f;      /* Rows of the picture that are just wall (an even number). */
+	const float bandTop = 3.0f;    /* ... starting a little below the very top edge. */
+
+	CPSStore *cps = VideoA5_LoadCPS(dir, filename);
+
+	if (cps == NULL)
+		return;
+
+	const ScreenDiv *div = &g_screenDiv[SCREENDIV_MENU];
+	ALLEGRO_BITMAP *target = al_get_target_bitmap();
+	const float w = al_get_bitmap_width(cps->bmp);
+	const float h = al_get_bitmap_height(cps->bmp);
+
+	/* The bars, in the units of the picture. */
+	const float left = div->x / div->scalex;
+	const float top = div->y / div->scaley;
+	const float right = al_get_bitmap_width(target) / div->scalex - w - left;
+	const float bottom = al_get_bitmap_height(target) / div->scaley - h - top;
+
+	/* A little darker than the picture, as it is further from the light. */
+	const ALLEGRO_COLOR tint = al_map_rgba_f(0.85f, 0.85f, 0.85f, 1.0f);
+
+	/* Side bars: the band repeated down the bar at its true size. */
+	for (int side = 0; side < 2; side++) {
+		const float bar = (side == 0) ? left : right;
+		const float x0 = (side == 0) ? -left : w;
+
+		for (float x = 0.0f; x < bar - 0.01f; x += w) {
+			const float tw = min(w, bar - x);
+
+			/* The left bar is tiled from the picture outwards. */
+			const float dx = (side == 0) ? x0 + bar - x - tw : x0 + x;
+
+			for (float y = 0.0f; y < h; y += band)
+				al_draw_tinted_bitmap_region(cps->bmp, tint, 0, bandTop, tw, min(band, h - y), dx, y, 0);
+		}
+	}
+
+	/* Tall windows: bars above and below, with the band as it is. */
+	for (int side = 0; side < 2; side++) {
+		const float bar = (side == 0) ? top : bottom;
+
+		for (float y = 0.0f; y < bar - 0.01f; y += band) {
+			const float th = min(band, bar - y);
+			const float dy = (side == 0) ? -(y + th) : h + y;
+
+			for (float x = -left; x < w + right; x += w)
+				al_draw_tinted_bitmap_region(cps->bmp, tint, 0, bandTop, min(w, w + right - x), th, x, dy, 0);
+		}
+	}
+
+	al_draw_bitmap(cps->bmp, 0, 0, 0);
+
+	/* The right side of the TV frame, if there is a bar to the right of it. */
+	float edge = w;
+
+	if (right > 0.5f) {
+		ALLEGRO_BITMAP *frame = VideoA5_GetMentatFrame(cps->bmp);
+
+		if (frame != NULL) {
+			al_draw_bitmap(frame, MENTAT_FRAME_RIGHT + 1, MENTAT_FRAME_TOP - MENTAT_FRAME_THICKNESS, 0);
+			edge = MENTAT_FRAME_RIGHT + 1 + MENTAT_FRAME_THICKNESS;
+		}
+
+		/* A soft shadow along the edge of the frame (or the picture), so the join is not hard. */
+		for (int i = 0; i < 8; i++) {
+			const float alpha = 0.5f * (1.0f - i / 8.0f);
+
+			al_draw_filled_rectangle(edge + i, 0, edge + i + 1.0f, h, al_map_rgba_f(0.0f, 0.0f, 0.0f, alpha));
+		}
+	}
+
+	if (left > 0.5f) {
+		for (int i = 0; i < 8; i++) {
+			const float alpha = 0.5f * (1.0f - i / 8.0f);
+
+			al_draw_filled_rectangle(-(i + 1.0f), 0, -(float)i, h, al_map_rgba_f(0.0f, 0.0f, 0.0f, alpha));
+		}
+	}
+}
+
 void
 VideoA5_DrawCPSCoordinates(enum SearchDirectory dir, const char *filename, int dx, int dy)
 {
