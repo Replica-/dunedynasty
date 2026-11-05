@@ -1036,7 +1036,10 @@ MenuBar_UninitGameControls(void)
 	while (w != NULL) {
 		Widget *next = GUI_Widget_GetNext(w);
 
-		if (30 <= w->index && w->index <= 38) { /* Widgets stored in g_table_windowWidgets. */
+		/* Widgets stored in g_table_windowWidgets.  Not tested by index, as
+		 * the house colour button (35) is allocated and must be freed.
+		 */
+		if (w >= g_table_windowWidgets && w < g_table_windowWidgets + 9) {
 		} else if (w->index >= 100) { /* Sliders. */
 			Slider_Free(w);
 		} else { /* Regular widgets. */
@@ -1248,6 +1251,20 @@ MenuBar_TickConfirmation(enum GameOverlay overlay)
  * --test-options-previous instead clicks the yellow preset and then Previous,
  * which hung the game (see ActionPanel_GetLocateButton).
  */
+static void
+MenuBar_DebugPrintMentat(const char *when)
+{
+	const Widget *m = GUI_Widget_Get_ByIndex(g_widgetLinkedListHead, 1);
+
+	if (m == NULL) {
+		fprintf(stdout, "test: mentat widget %s: MISSING\n", when);
+	} else {
+		fprintf(stdout, "test: mentat widget %s: x=%d y=%d w=%d h=%d div=%d invisible=%d\n", when,
+				m->offsetX, m->offsetY, m->width, m->height, (int)m->div, (int)m->flags.invisible);
+	}
+	fflush(stdout);
+}
+
 void
 MenuBar_DebugTestColourMenu(void)
 {
@@ -1256,6 +1273,229 @@ MenuBar_DebugTestColourMenu(void)
 
 	frames++;
 
+	if (g_debugTestColourMenu == 7) {
+		/* --test-colour-mouse: change the house colour in the settings by clicking
+		 * with the mouse (events injected as Allegro delivers them), with a unit
+		 * selected, and take screenshots.
+		 */
+		static const struct { int frame; int what; } script[] = {
+			{ 240, 100 },  /* Select a unit. */
+			{ 260,   1 },  /* Options button (head list). */
+			{ 285, 200 },  /* Screenshot (plain Options window). */
+		{ 300,  32 },  /* Game Controls. */
+			{ 340,  94 },  /* Radio button: colour page. */
+			{ 380,  35 },  /* House Color button, x3. */
+			{ 410,  35 },
+			{ 440,  35 },
+			{ 470, 133 },  /* Preset swatch. */
+			{ 500, 131 },  /* Green slider. */
+			{ 540, 200 },  /* Screenshot (settings open). */
+			{ 560,  26 },  /* Previous. */
+			{ 600,  35 },  /* Continue game. */
+			{ 660, 200 },  /* Screenshot (back in game). */
+			{ 680,   2 },  /* Hover Mentat. */
+			{ 740, 200 },
+			{ 760,   3 },  /* Click Mentat. */
+			{ 820, 200 },
+			{ 860, 300 },  /* Exit. */
+		};
+		static int next, click_step, cx, cy;
+		static bool click_overlay;
+
+		if (next < (int)lengthof(script) && frames == script[next].frame) {
+			const int what = script[next].what;
+			next++;
+
+			if (what == 100) {
+				PoolFindStruct find;
+				Unit *u = Unit_FindFirst(&find, g_playerHouseID, UNIT_INVALID);
+
+				if (u != NULL) {
+					Unit_Select(u);
+					GUI_ChangeSelectionType(SELECTIONTYPE_UNIT);
+				}
+			} else if (what == 200) {
+				VideoA5_CaptureScreenshot();
+			} else if (what == 300) {
+				exit(0);
+			} else if (what == 1 || what == 2 || what == 3) {
+				/* Mentat (2 = hover only, 3 = click) and Options are head-list buttons. */
+				const ScreenDiv *mb = &g_screenDiv[SCREENDIV_MENUBAR];
+				const int index = (what == 1) ? 2 : 1;
+				const Widget *w = GUI_Widget_Get_ByIndex(g_widgetLinkedListHead, index);
+
+				cx = mb->x + mb->scalex * (w->offsetX + w->width / 2);
+				cy = mb->y + mb->scaley * (w->offsetY + w->height / 2);
+				click_overlay = false;
+				click_step = (what == 2) ? 4 : 1;
+			} else {
+				const Widget *w = GUI_Widget_Get_ByIndex(g_widgetLinkedListTail, what);
+				const ScreenDiv *md = &g_screenDiv[SCREENDIV_MENU];
+
+				if (w == NULL) {
+					fprintf(stdout, "test: widget %d not found\n", what);
+				} else {
+					const WidgetProperties *wp = &g_widgetProperties[w->parentID];
+					int ox = w->offsetX;
+					int oy = w->offsetY;
+					int dx = w->width / 2;
+					int dy = w->height / 2;
+
+					if (oy < 0)
+						oy += wp->height;
+
+					if (what == 133)
+						dx = HOUSE_COLOUR_PREVIEW_W + 6 + 2 * (HOUSE_COLOUR_PRESET_W + HOUSE_COLOUR_PRESET_GAP) + 2;
+					else if (what >= 130)
+						dx = w->width / 3;
+
+					cx = md->x + md->scalex * (wp->xBase + ox + dx);
+					cy = md->y + md->scaley * (wp->yBase + oy + dy);
+					click_overlay = true;
+					click_step = 1;
+				}
+			}
+		}
+
+		if (click_step == 1) {
+			Mouse_EventHandler(click_overlay, cx, cy, 0, 0);
+			click_step = 2;
+		} else if (click_step == 2) {
+			Mouse_EventHandler(click_overlay, cx, cy, 0, SCANCODE_MOUSE_LMB);
+			click_step = 3;
+		} else if (click_step == 3) {
+			Mouse_EventHandler(click_overlay, cx, cy, 0, SCANCODE_MOUSE_LMB | SCANCODE_RELEASE);
+			click_step = 0;
+		} else if (click_step == 4) {
+			Mouse_EventHandler(click_overlay, cx, cy, 0, 0); /* Hover. */
+			click_step = 0;
+		}
+
+		if (frames % 60 == 0) {
+			fprintf(stdout, "test: frame %d overlay=%d\n", frames, (int)g_gameOverlay);
+			fflush(stdout);
+		}
+
+		return;
+	}
+
+	if (g_debugTestColourMenu == 6) {
+		/* --test-colour-unit: select a unit, change the house colour, look at the panels. */
+		if (frames == 240) {
+			PoolFindStruct find;
+			Unit *u = Unit_FindFirst(&find, g_playerHouseID, UNIT_INVALID);
+
+			if (u != NULL) {
+				Unit_Select(u);
+				GUI_ChangeSelectionType(SELECTIONTYPE_UNIT);
+			}
+		} else if (frames == 300) {
+			VideoA5_CaptureScreenshot();
+		} else if (frames == 320) {
+			for (int i = 0; i < 2; i++) {
+				if (++g_gameConfig.houseColorPalette >= 8)
+					g_gameConfig.houseColorPalette = 0;
+
+				GUI_Palette_CreateRemap(g_playerHouseID);
+				VideoA5_RebuildHousePalette(g_playerHouseID);
+				GUI_Palette_RemapScreen(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, g_screenActiveID, g_remap);
+			}
+		} else if (frames == 400) {
+			VideoA5_CaptureScreenshot();
+		} else if (frames >= 410 && frames <= 520) {
+			/* Hover over, then hold a click on, the Mentat button. */
+			const ScreenDiv *mb = &g_screenDiv[SCREENDIV_MENUBAR];
+			const int x = mb->x + mb->scalex * (16 + 40);
+			const int y = mb->y + mb->scaley * (1 + 8);
+
+			if (frames == 410 || frames == 450)
+				Mouse_EventHandler(false, x, y, 0, 0);
+			else if (frames == 452)
+				Mouse_EventHandler(false, x, y, 0, SCANCODE_MOUSE_LMB);
+			else if (frames == 480)
+				VideoA5_CaptureScreenshot();
+			else if (frames == 500)
+				Mouse_EventHandler(false, x, y, 0, SCANCODE_MOUSE_LMB | SCANCODE_RELEASE);
+		} else if (frames == 560) {
+			VideoA5_CaptureScreenshot();
+		} else if (frames == 600) {
+			exit(0);
+		}
+
+		return;
+	}
+
+	if (g_debugTestColourMenu == 5) {
+		/* --test-options-continue: click Options, Continue game, then Mentat,
+		 * with mouse events injected as Allegro delivers them.
+		 */
+		const ScreenDiv *mb = &g_screenDiv[SCREENDIV_MENUBAR];
+		static int x, y, step;
+		static bool overlay_click;
+
+		if (frames == 240) {
+			MenuBar_DebugPrintMentat("before Options");
+			x = mb->x + mb->scalex * (104 + 40); /* Options button. */
+			y = mb->y + mb->scaley * (1 + 8);
+			overlay_click = false;
+			step = 1;
+		} else if (frames == 300) {
+			const Widget *cont = GUI_Widget_Get_ByIndex(g_widgetLinkedListTail, 35);
+			const ScreenDiv *md = &g_screenDiv[SCREENDIV_MENU];
+
+			fprintf(stdout, "test: overlay=%d before Continue click\n", (int)g_gameOverlay);
+			if (cont != NULL) {
+				const WidgetProperties *wp = &g_widgetProperties[cont->parentID];
+
+				x = md->x + md->scalex * (wp->xBase + cont->offsetX + cont->width / 2);
+				y = md->y + md->scaley * (wp->yBase + cont->offsetY + cont->height / 2);
+			}
+			overlay_click = true;
+			step = 1;
+		} else if (frames == 360) {
+			fprintf(stdout, "test: overlay=%d after Continue click, mouse %d,%d\n",
+					(int)g_gameOverlay, g_mouseX, g_mouseY);
+			MenuBar_DebugPrintMentat("after Continue");
+			x = mb->x + mb->scalex * (16 + 40); /* Mentat button. */
+			y = mb->y + mb->scaley * (1 + 8);
+			overlay_click = false;
+			step = 1;
+		} else if (frames == 420) {
+			fprintf(stdout, "test: mentat click after Options/Continue %s (overlay=%d)\n",
+					(g_gameOverlay == GAMEOVERLAY_MENTAT) ? "WORKED" : "FAILED", (int)g_gameOverlay);
+			fflush(stdout);
+		} else if (frames == 480) {
+			VideoA5_CaptureScreenshot();
+		} else if (frames == 520) {
+			exit(0);
+		}
+
+		/* DD_TEST_KEYS: open with F2, close with Escape, instead of clicking. */
+		if (getenv("DD_TEST_KEYS")) {
+			if (frames == 240 || frames == 300) {
+				Input_EventHandler(frames == 240 ? SCANCODE_F2 : SCANCODE_ESCAPE);
+			} else if (frames == 243 || frames == 303) {
+				Input_EventHandler((frames == 243 ? SCANCODE_F2 : SCANCODE_ESCAPE) | SCANCODE_RELEASE);
+			}
+
+			if (frames == 240 || frames == 300)
+				step = 0;
+		}
+
+		if (step == 1) {
+			Mouse_EventHandler(overlay_click, x, y, 0, 0);
+			step = 2;
+		} else if (step == 2) {
+			Mouse_EventHandler(overlay_click, x, y, 0, SCANCODE_MOUSE_LMB);
+			step = 3;
+		} else if (step == 3) {
+			Mouse_EventHandler(overlay_click, x, y, 0, SCANCODE_MOUSE_LMB | SCANCODE_RELEASE);
+			step = 0;
+		}
+
+		return;
+	}
+
 	if (state == 0 && frames > 240) {
 		if (g_debugTestColourMenu == 2) {
 			/* --test-mentat: the in-game Mentat screen. */
@@ -1263,6 +1503,7 @@ MenuBar_DebugTestColourMenu(void)
 		} else {
 			Widget *radio;
 
+			MenuBar_DebugPrintMentat("before");
 			g_gameOverlay = GAMEOVERLAY_GAME_CONTROLS;
 			MenuBar_CreateGameControls();
 
@@ -1284,6 +1525,18 @@ MenuBar_DebugTestColourMenu(void)
 		state = 1;
 		frames = 0;
 	} else if (state == 1 && g_debugTestColourMenu == 4 && frames > 30) {
+		/* Cycle the house colour button as the player would. */
+		for (int i = 0; i < (getenv("DD_TEST_NOCYCLE") ? 0 : 10); i++) {
+			if (++g_gameConfig.houseColorPalette >= 8)
+				g_gameConfig.houseColorPalette = 0;
+
+			GUI_Palette_CreateRemap(g_playerHouseID);
+			VideoA5_RebuildHousePalette(g_playerHouseID);
+			GUI_Palette_RemapScreen(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, g_screenActiveID, g_remap);
+		}
+
+		MenuBar_DebugPrintMentat("after colour cycling");
+
 		/* Previous: the same as MenuBar_TickGameControls does. */
 		g_gameOverlay = GAMEOVERLAY_OPTIONS;
 		MenuBar_UninitGameControls();
@@ -1294,6 +1547,35 @@ MenuBar_DebugTestColourMenu(void)
 		frames = 0;
 	} else if (state == 2 && g_debugTestColourMenu == 4) {
 		/* The game used to hang here, drawing, so reaching the end is the test. */
+		if (frames == 5)
+			MenuBar_DebugPrintMentat("after Previous");
+
+		/* Continue game, then look at the menubar. */
+		if (frames == 20)
+			g_gameOverlay = GAMEOVERLAY_NONE;
+
+		if (frames == 80)
+			VideoA5_CaptureScreenshot();
+
+		/* Click the Mentat button with real input events. */
+		if (frames >= 40 && frames <= 46) {
+			const ScreenDiv *mb = &g_screenDiv[SCREENDIV_MENUBAR];
+
+			g_mouseX = mb->x + mb->scalex * (16 + 40);
+			g_mouseY = mb->y + mb->scaley * (1 + 8);
+
+			if (frames == 42)
+				Input_EventHandler(SCANCODE_MOUSE_LMB);
+			else if (frames == 44)
+				Input_EventHandler(SCANCODE_MOUSE_LMB | SCANCODE_RELEASE);
+		}
+
+		if (frames == 70) {
+			fprintf(stdout, "test: mentat click %s (overlay=%d)\n",
+					(g_gameOverlay == GAMEOVERLAY_MENTAT) ? "WORKED" : "FAILED", (int)g_gameOverlay);
+			fflush(stdout);
+		}
+
 		if (frames > 120) {
 			fprintf(stdout, "test: survived Previous\n");
 			fflush(stdout);

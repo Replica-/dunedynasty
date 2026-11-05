@@ -386,11 +386,13 @@ ActionPanel_GetLocateButton(void)
 		return NULL;
 
 	/* Rebuilding the game widgets frees this one along with the rest, so if it
-	 * is no longer in the list the pointer is stale: make a new one.
+	 * is no longer in the list the pointer is stale: make a new one.  A new
+	 * widget (e.g. the Mentat button) can be allocated at the freed address,
+	 * so the index has to match too.
 	 */
 	bool linked = false;
 	for (const Widget *w = g_widgetLinkedListHead; w != NULL; w = w->next) {
-		if (w == locate) {
+		if (w == locate && w->index == LOCATE_WIDGET_INDEX) {
 			linked = true;
 			break;
 		}
