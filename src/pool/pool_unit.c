@@ -204,7 +204,7 @@ Unit_Allocate(uint16 index, enum UnitType type, enum HouseType houseID)
 	u->route[0]             = 0xFF;
 
 	if (type == UNIT_SANDWORM)
-		u->amount = 3;
+		u->amount = 2;
 
 	/* ENHANCEMENT -- Introduced variables. */
 	u->permanentFollow      = false;

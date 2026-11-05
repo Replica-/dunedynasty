@@ -356,6 +356,27 @@ static const ExplosionCommandStruct s_explosion19[] = {
 	{ EXPLOSION_STOP              ,    0 }
 };
 
+/* Unit hits: as explosion00 and explosion01, with the sprites marked. */
+static const ExplosionCommandStruct s_explosion20[] = {
+	{ EXPLOSION_SET_SPRITE        ,  153 | EXPLOSION_SPRITE_HIT },
+	{ EXPLOSION_SET_TIMEOUT       ,    3 },
+	{ EXPLOSION_BLOOM_EXPLOSION   ,    0 },
+	{ EXPLOSION_SET_SPRITE        ,  153 | EXPLOSION_SPRITE_HIT },
+	{ EXPLOSION_SET_TIMEOUT       ,    3 },
+	{ EXPLOSION_STOP              ,    0 }
+};
+
+static const ExplosionCommandStruct s_explosion21[] = {
+	{ EXPLOSION_SET_SPRITE        ,  154 | EXPLOSION_SPRITE_HIT },
+	{ EXPLOSION_BLOOM_EXPLOSION   ,    0 },
+	{ EXPLOSION_SET_TIMEOUT       ,    3 },
+	{ EXPLOSION_SET_SPRITE        ,  153 | EXPLOSION_SPRITE_HIT },
+	{ EXPLOSION_SET_TIMEOUT       ,    3 },
+	{ EXPLOSION_SET_SPRITE        ,  154 | EXPLOSION_SPRITE_HIT },
+	{ EXPLOSION_SET_TIMEOUT       ,    3 },
+	{ EXPLOSION_STOP              ,    0 }
+};
+
 const ExplosionCommandStruct * const g_table_explosion[EXPLOSIONTYPE_MAX] = {
 	s_explosion00,
 	s_explosion01,
@@ -376,5 +397,7 @@ const ExplosionCommandStruct * const g_table_explosion[EXPLOSIONTYPE_MAX] = {
 	s_explosion16,
 	s_explosion17,
 	s_explosion18,
-	s_explosion19
+	s_explosion19,
+	s_explosion20,
+	s_explosion21
 };

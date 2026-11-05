@@ -269,6 +269,8 @@ Viewport_Target(Unit *u, enum UnitActionType action, uint16 packed)
 
 	if (g_enable_sound_effects == SOUNDEFFECTS_SYNTH_ONLY) {
 		Audio_PlayEffect(EFFECT_SET_TARGET);
+	} else if (u->o.type != UNIT_SANDWORM && Audio_PlayRadioVoice(u->o.index, RADIO_ACKNOWLEDGE)) {
+		/* A radio voice line was said. */
 	} else if (g_table_unitInfo[u->o.type].movementType == MOVEMENT_FOOT) {
 		Audio_PlaySample(g_table_actionInfo[action].soundID, 255, 0.0);
 	} else if (u->o.type != UNIT_SANDWORM) {

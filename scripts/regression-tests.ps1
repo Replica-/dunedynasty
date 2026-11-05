@@ -14,11 +14,13 @@
   .\scripts\regression-tests.ps1 -Slow            ... and the slow ones too
   .\scripts\regression-tests.ps1 -Only mentat     tests whose name matches
   .\scripts\regression-tests.ps1 -Build           build first
+  .\scripts\regression-tests.ps1 -Visible         show the window and play sound (default: --headless, no window, no sound)
 #>
 param(
 	[string]$Only = "",
 	[switch]$Slow,
 	[switch]$Build,
+	[switch]$Visible,
 	[string]$Exe = "$PSScriptRoot\..\dist\dunedynasty.exe",
 	[string]$Results = "$env:TEMP\dd-regression"
 )
@@ -42,6 +44,16 @@ $tests = @(
 	   d = "Bene Gesserit house screen: top/bottom strips, bricks on the right" },
 	@{ n = "panel";            t = 90;  k = "shot"; a = $mission + "--test-panel";
 	   d = "Locate line on an enemy unit, action panel stats" },
+	@{ n = "daynight-day";     t = 60;  k = "shot"; a = $mission + @("--time-of-day", "0.12", "--test-daynight");
+	   d = "daytime: shadows of units and buildings" },
+	@{ n = "daynight-night";   t = 60;  k = "shot"; a = $mission + @("--time-of-day", "0.75", "--test-daynight");
+	   d = "night: darkness, headlights, fog of war" },
+	@{ n = "orders";           t = 240; k = "";     a = $mission + "--test-orders";
+	   d = "selecting and ordering units for a while, with sound (muted), shadows and storms" },
+	@{ n = "orders-night";     t = 240; k = "";     a = $mission + @("--time-of-day", "0.75", "--sandstorm-now", "--test-orders");
+	   d = "the same at night, in a sandstorm, with headlights and fog of war" },
+	@{ n = "sandstorm";        t = 60;  k = "shot"; a = $mission + "--test-sandstorm";
+	   d = "a sandstorm at full strength over the viewport" },
 	@{ n = "deathhand";        t = 120; k = "";     a = $mission + "--test-deathhand";
 	   d = "Death Hand missile: scatter and damage near the target" },
 	@{ n = "deathhand-cy";     t = 120; k = "";     a = $mission + "--test-deathhand-cy";
@@ -91,7 +103,7 @@ foreach ($test in $tests) {
 	Get-Process dunedynasty -ErrorAction SilentlyContinue | Stop-Process -Force
 	$before = @(Get-ChildItem $data -Filter "screenshot_*.png" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
 
-	$gameArgs = @("--windowed") + $test.a
+	$gameArgs = @("--windowed") + $(if ($Visible) { @() } else { @("--headless") }) + $test.a
 	$watch = [Diagnostics.Stopwatch]::StartNew()
 	$p = Start-Process $Exe -ArgumentList $gameArgs -WorkingDirectory $root -PassThru
 	$finished = $p.WaitForExit($test.t * 1000)

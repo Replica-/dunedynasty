@@ -20,8 +20,14 @@ campaign=
 house_colour=
 
 [graphics]
-# driver is one of: opengl, direct3d
-driver=opengl
+# The game always uses OpenGL; there is no driver setting any more.
+# Procedural explosions and smoke.
+hardware_effects=1
+# Day and night: shadows by day; dark nights with headlights, which also turn fog
+# of war on.  One full day and night is 24 minutes of game time.
+day_night=1
+# Random sandstorms, which slowly wear down buildings (never below half their hitpoints).
+sandstorms=1
 # window_mode is one of: windowed, fullscreen, fullscreenwindow
 window_mode=fullscreenwindow
 screen_width=640

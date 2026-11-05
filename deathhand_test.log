@@ -1,0 +1,44 @@
+[test] started (construction yard)
+[test] construction yard 0 at tile 16,40: 400 hitpoints (max 400), targeting its centre
+[test] missile 0 launched
+[test] t=0 clouds=0 construction yard hp: 400
+[test] t=1 clouds=0 construction yard hp: 400
+[toxic] cloud added: radius 80 (1/16 tiles) at tile 17,41, house 1, ends in 600 ticks
+[test] impact 1 landed 0.73 tiles from the target
+[test] t=2 clouds=1 construction yard hp: 199
+[test] t=3 clouds=1 construction yard hp: 199
+[toxic] pulse hits unit 29 type 9 hp 173
+[toxic] pulse hits unit 26 type 15 hp 88
+[toxic] pulse hits unit 27 type 15 hp 106
+[toxic] pulse hits unit 25 type 9 hp 167
+[toxic] pulse hits unit 23 type 9 hp 147
+[toxic] pulse hits unit 22 type 15 hp 110
+[test] screenshot requested
+[test] t=4 clouds=1 construction yard hp: 199
+[test] t=5 clouds=1 construction yard hp: 199
+[toxic] pulse hits unit 29 type 9 hp 163
+[toxic] pulse hits unit 26 type 15 hp 78
+[toxic] pulse hits unit 27 type 15 hp 96
+[toxic] pulse hits unit 25 type 9 hp 157
+[toxic] pulse hits unit 23 type 9 hp 137
+[toxic] pulse hits unit 22 type 15 hp 100
+[test] t=6 clouds=1 construction yard hp: 199
+[test] t=7 clouds=1 construction yard hp: 199
+[toxic] pulse hits unit 29 type 9 hp 153
+[toxic] pulse hits unit 26 type 15 hp 68
+[toxic] pulse hits unit 27 type 15 hp 86
+[toxic] pulse hits unit 25 type 9 hp 147
+[toxic] pulse hits unit 23 type 9 hp 127
+[toxic] pulse hits unit 22 type 15 hp 90
+[test] t=8 clouds=1 construction yard hp: 199
+[test] t=9 clouds=1 construction yard hp: 199
+[toxic] pulse hits unit 29 type 9 hp 143
+[toxic] pulse hits unit 26 type 15 hp 58
+[toxic] pulse hits unit 27 type 15 hp 76
+[toxic] pulse hits unit 25 type 9 hp 137
+[toxic] pulse hits unit 23 type 9 hp 117
+[toxic] pulse hits unit 22 type 15 hp 80
+[test] t=10 clouds=1 construction yard hp: 199
+[test] t=11 clouds=1 construction yard hp: 199
+[toxic] cloud expired
+[test] finished: 1 impacts, mean error 0.73 tiles

@@ -5,6 +5,7 @@
 #include <allegro5/allegro_audio.h>
 #include <allegro5/allegro_memfile.h>
 #include <stdio.h>
+#include <string.h>
 #include "buildcfg.h"
 
 #include "audio_a5.h"
@@ -44,6 +45,7 @@ extern "C" {
 #include "../house.h"
 #include "../table/sound.h"
 #include "../timer/timer.h"
+#include "../tools/random_xorshift.h"
 }
 
 /* Sample instance 0 for narrator voices.
@@ -85,6 +87,8 @@ static ALLEGRO_MIXER *al_mixer;
 static char *AudioA5_LoadInternalMusic(const MusicInfo *mid, uint32 *ret_length);
 static void AudioA5_InitAdlibEffects(void);
 static void AudioA5_FreeMusicStream(void);
+static void AudioA5_UnloadRadioVoices(void);
+static void AudioA5_UnloadWind(void);
 
 /*--------------------------------------------------------------*/
 
@@ -151,6 +155,7 @@ AudioA5_Init(void)
 {
 	bool enable_midi = false;
 
+
 	if (!al_install_audio()) {
 		Warning("al_install_audio() failed.\n");
 		goto audio_init_failed;
@@ -172,6 +177,12 @@ AudioA5_Init(void)
 
 	al_attach_mixer_to_voice(al_mixer, al_voice);
 
+	/* Headless: the audio system runs like normal, so that the tests cover it, but
+	 * the mixer is turned right down and nothing is heard.
+	 */
+	if (g_headless)
+		al_set_mixer_gain(al_mixer, 0.0f);
+
 	for (int i = 0; i < MAX_SAMPLE_INSTANCES; i++) {
 		s_instance[i] = al_create_sample_instance(NULL);
 		al_attach_sample_instance_to_mixer(s_instance[i], al_mixer);
@@ -180,6 +191,9 @@ AudioA5_Init(void)
 #ifdef WITH_ACODEC
 	al_init_acodec_addon();
 #endif
+
+	AudioA5_LoadRadioVoices(g_dune_data_dir);
+	AudioA5_LoadWind(g_dune_data_dir);
 
 	/* Initialise MIDI player. */
 	if (g_table_music_set[MUSICSET_DUNE2_MIDI].enable)
@@ -232,6 +246,8 @@ AudioA5_Uninit(void)
 		s_instance[i] = NULL;
 	}
 
+	AudioA5_UnloadWind();
+	AudioA5_UnloadRadioVoices();
 	AudioA5_FreeMusicStream();
 
 	if (s_effect_stream != NULL) {
@@ -799,4 +815,197 @@ bool
 AudioA5_PollNarrator(void)
 {
 	return (al_get_sample_instance_playing(s_instance[0]));
+}
+
+/*--------------------------------------------------------------*/
+
+/* Radio voices: extra spoken lines for selecting and ordering units, loaded
+ * from <data dir>/radio/<voice name>/{sel,ack}_*.wav.  Each voice is a
+ * character, and each unit keeps the same one.
+ */
+
+#define RADIO_MAX_VOICES 16
+#define RADIO_MAX_LINES 24
+
+static ALLEGRO_SAMPLE *s_radio[RADIO_MAX_VOICES][RADIO_NUM_KINDS][RADIO_MAX_LINES];
+static int s_radio_lines[RADIO_MAX_VOICES][RADIO_NUM_KINDS];
+static int s_radio_last[RADIO_MAX_VOICES][RADIO_NUM_KINDS];
+static int s_radio_voices = 0;
+
+static void
+AudioA5_LoadRadioVoice(const char *dir)
+{
+	if (s_radio_voices >= RADIO_MAX_VOICES)
+		return;
+
+	ALLEGRO_FS_ENTRY *d = al_create_fs_entry(dir);
+	if (d == NULL || !al_open_directory(d)) {
+		if (d != NULL)
+			al_destroy_fs_entry(d);
+		return;
+	}
+
+	const int voice = s_radio_voices;
+	static const char *prefix[RADIO_NUM_KINDS] = { "sel_", "ack_" };
+
+	for (ALLEGRO_FS_ENTRY *e = al_read_directory(d); e != NULL; e = al_read_directory(d)) {
+		const char *path = al_get_fs_entry_name(e);
+		const char *name = strrchr(path, '/');
+		const char *name2 = strrchr(path, '\\');
+		if (name2 != NULL && (name == NULL || name2 > name)) name = name2;
+		name = (name != NULL) ? name + 1 : path;
+
+		for (int kind = 0; kind < RADIO_NUM_KINDS; kind++) {
+			if (strncmp(name, prefix[kind], 4) != 0 || s_radio_lines[voice][kind] >= RADIO_MAX_LINES)
+				continue;
+
+			ALLEGRO_SAMPLE *s = al_load_sample(path);
+			if (s != NULL)
+				s_radio[voice][kind][s_radio_lines[voice][kind]++] = s;
+		}
+
+		al_destroy_fs_entry(e);
+	}
+
+	al_close_directory(d);
+	al_destroy_fs_entry(d);
+
+	if (s_radio_lines[voice][RADIO_SELECT] > 0 || s_radio_lines[voice][RADIO_ACKNOWLEDGE] > 0) {
+		s_radio_last[voice][RADIO_SELECT] = -1;
+		s_radio_last[voice][RADIO_ACKNOWLEDGE] = -1;
+		s_radio_voices++;
+	}
+}
+
+void
+AudioA5_LoadRadioVoices(const char *dataDir)
+{
+	char root[1024];
+	snprintf(root, sizeof(root), "%sradio", dataDir);
+
+	ALLEGRO_FS_ENTRY *d = al_create_fs_entry(root);
+	if (d == NULL || !al_open_directory(d)) {
+		if (d != NULL)
+			al_destroy_fs_entry(d);
+		return;
+	}
+
+	for (ALLEGRO_FS_ENTRY *e = al_read_directory(d); e != NULL; e = al_read_directory(d)) {
+		if (al_get_fs_entry_mode(e) & ALLEGRO_FILEMODE_ISDIR)
+			AudioA5_LoadRadioVoice(al_get_fs_entry_name(e));
+
+		al_destroy_fs_entry(e);
+	}
+
+	al_close_directory(d);
+	al_destroy_fs_entry(d);
+
+	fprintf(stdout, "Radio voices: %d loaded from %s\n", s_radio_voices, root);
+}
+
+int
+AudioA5_RadioVoiceCount(void)
+{
+	return s_radio_voices;
+}
+
+bool
+AudioA5_PlayRadio(int voiceSeed, enum RadioKind kind, float volume)
+{
+	if (s_radio_voices == 0 || al_mixer == NULL)
+		return false;
+
+	const int voice = (voiceSeed < 0 ? -voiceSeed : voiceSeed) % s_radio_voices;
+	const int num = s_radio_lines[voice][kind];
+	if (num == 0)
+		return false;
+
+	/* Any line but the one this voice said last. */
+	int line = Random_Xorshift_Range(0, num - 1);
+	if (num > 1 && line == s_radio_last[voice][kind])
+		line = (line + 1) % num;
+	s_radio_last[voice][kind] = line;
+
+	/* Instance 1 is the acknowledgement channel: a new line cuts the old one. */
+	ALLEGRO_SAMPLE_INSTANCE *si = s_instance[1];
+	al_stop_sample_instance(si);
+
+	if (!al_set_sample(si, s_radio[voice][kind][line]))
+		return false;
+
+	al_set_sample_instance_gain(si, sound_volume * volume);
+	al_set_sample_instance_pan(si, ALLEGRO_AUDIO_PAN_NONE);
+	al_play_sample_instance(si);
+	return true;
+}
+
+static void
+AudioA5_UnloadRadioVoices(void)
+{
+	for (int v = 0; v < RADIO_MAX_VOICES; v++) {
+		for (int k = 0; k < RADIO_NUM_KINDS; k++) {
+			for (int i = 0; i < s_radio_lines[v][k]; i++) {
+				al_destroy_sample(s_radio[v][k][i]);
+				s_radio[v][k][i] = NULL;
+			}
+			s_radio_lines[v][k] = 0;
+		}
+	}
+
+	s_radio_voices = 0;
+}
+
+/*--------------------------------------------------------------*/
+
+/* Sandstorm wind: a quiet looping sound on a channel of its own, whose volume
+ * follows the strength of the storm.
+ */
+
+static ALLEGRO_SAMPLE *s_wind_sample = NULL;
+static ALLEGRO_SAMPLE_INSTANCE *s_wind_instance = NULL;
+
+void
+AudioA5_LoadWind(const char *dataDir)
+{
+	char path[1024];
+	snprintf(path, sizeof(path), "%ssfx/sandstorm_wind.wav", dataDir);
+
+	s_wind_sample = al_load_sample(path);
+	if (s_wind_sample == NULL || al_mixer == NULL)
+		return;
+
+	s_wind_instance = al_create_sample_instance(s_wind_sample);
+	if (s_wind_instance == NULL)
+		return;
+
+	al_set_sample_instance_playmode(s_wind_instance, ALLEGRO_PLAYMODE_LOOP);
+	al_attach_sample_instance_to_mixer(s_wind_instance, al_mixer);
+}
+
+void
+AudioA5_SetWind(float volume)
+{
+	if (s_wind_instance == NULL)
+		return;
+
+	if (volume <= 0.001f) {
+		if (al_get_sample_instance_playing(s_wind_instance))
+			al_stop_sample_instance(s_wind_instance);
+		return;
+	}
+
+	al_set_sample_instance_gain(s_wind_instance, sound_volume * volume);
+	al_set_sample_instance_pan(s_wind_instance, ALLEGRO_AUDIO_PAN_NONE);
+
+	if (!al_get_sample_instance_playing(s_wind_instance))
+		al_play_sample_instance(s_wind_instance);
+}
+
+static void
+AudioA5_UnloadWind(void)
+{
+	al_destroy_sample_instance(s_wind_instance);
+	s_wind_instance = NULL;
+	al_destroy_sample(s_wind_sample);
+	s_wind_sample = NULL;
 }

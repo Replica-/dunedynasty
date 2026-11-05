@@ -14,6 +14,8 @@
 #include "../pool/pool.h"
 #include "../pool/pool_unit.h"
 #include "../scenario.h"
+#include "../sandstorm.h"
+#include "../daynight.h"
 #include "../sprites.h"
 #include "../structure.h"
 #include "../table/widgetinfo.h"
@@ -33,6 +35,7 @@ void GUI_Widget_Viewport_Draw(void)
 	PoolFindStruct find;
 
 	Viewport_DrawTiles();
+	DayNight_DrawShadows();
 
 	for (const Unit *u = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_SANDWORM);
 			u != NULL;
@@ -65,6 +68,8 @@ void GUI_Widget_Viewport_Draw(void)
 
 	Explosion_Draw();
 	Viewport_DrawTileFog();
+	Sandstorm_Draw();
+	DayNight_DrawDarkness();
 
 	Viewport_DrawRallyPoint();
 	Viewport_DrawMovementIndicator();	

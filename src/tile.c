@@ -2,6 +2,7 @@
 
 #include "tile.h"
 
+#include "daynight.h"
 #include "house.h"
 #include "map.h"
 #include "tools/coord.h"
@@ -25,6 +26,11 @@ void
 Tile_RefreshFogInRadius(enum HouseFlag houses, enum TileUnveilCause cause,
 		tile32 tile, uint16 radius, bool unveil)
 {
+	/* A night with a sandstorm: nobody sees further than a couple of tiles. */
+	const int limit = DayNight_VisionLimit();
+	if (limit > 0 && radius > limit)
+		radius = limit;
+
 	uint16 packed = Tile_PackTile(tile);
 	if (!Map_IsValidPosition(packed))
 		return;

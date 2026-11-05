@@ -16,6 +16,8 @@
 #include "config.h"
 #include "enhancement.h"
 #include "explosion.h"
+#include "sandstorm.h"
+#include "daynight.h"
 #include "gui/gui.h"
 #include "house.h"
 #include "input/input.h"
@@ -88,6 +90,9 @@ GameLoop_Server_Logic(void)
 	if (g_debugTestPanel)
 		Unit_DebugTestPanel();
 
+	if (g_debugTestOrders)
+		Unit_DebugTestOrders();
+
 	/* --test-spice: play for a few minutes, logging the harvesters' spice choices. */
 	if (g_debugTestSpice && g_timerGame - g_tickScenarioStart > 60 * 240)
 		exit(0);
@@ -98,6 +103,8 @@ GameLoop_Server_Logic(void)
 	GameLoop_Structure();
 	GameLoop_House();
 	Explosion_Tick();
+	Sandstorm_Tick();
+	DayNight_Tick();
 	Animation_Tick();
 	Unit_Sort();
 }

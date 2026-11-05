@@ -19,6 +19,8 @@
 #include "slider.h"
 #include "viewport.h"
 #include "../audio/audio.h"
+#include "../daynight.h"
+#include "../sandstorm.h"
 #include "../common_a5.h"
 #include "../config.h"
 #include "../enhancement.h"
@@ -173,6 +175,15 @@ MenuBar_DrawUnitCounters(const ScreenDiv *menubar)
 
 	GUI_DrawText_Wrapper("Harvesters: %d", x, 5, harvester_fg, 0, 0x211, harvesters);
 	GUI_DrawText_Wrapper("Worm Threat: %s", x - 100, 5, threat_fg, 0, 0x211, threat);
+
+	/* The time of day: a sun or moon, a bar for the whole day with a marker, and its name. */
+	if (DayNight_Active()) {
+		const int ix = x - 100 - 180;
+
+		DayNight_DrawIndicator(ix, 4);
+		/* Text is positioned on a different scale from the pixels of the indicator. */
+		GUI_DrawText_Wrapper("%s", x - 208, 5, 29, 0, 0x211, DayNight_Name());
+	}
 }
 
 void
@@ -588,25 +599,29 @@ MenuBar_DrawGameControlLabel(Widget *w)
 static bool
 MenuBar_ClickRadioButton(Widget *radio)
 {
-	const int visible_widgets[5][6 + 5*3 + 1] = {
-		{ 26, 90, 91, 92, 93, 94,
+	const int visible_widgets[6][7 + 5*3 + 4]= {
+		{ 26, 90, 91, 92, 93, 94, 95,
 		  20, 30, 100, 21, 31, 101, 22, 32, 102, 23, 33, 103, 24, 34, 104,
 		  -1
 		},
-		{ 26, 90, 91, 92, 93, 94,
+		{ 26, 90, 91, 92, 93, 94, 95,
 		  40, 50, 110, 41, 51, 111, 42, 52, 112, 43, 53, 113, 44, 54, 114,
 		  -1
 		},
-		{ 26, 90, 91, 92, 93, 94,
+		{ 26, 90, 91, 92, 93, 94, 95,
 		  60, 70, 120, 61, 71, 121, 62, 72, 122, 63, 73, 123, 64, 74, 124,
 		  -1
 		},
-		{ 26, 90, 91, 92, 93, 94,
-		  45, 55, 115, 46, 56, 116, 47, 57, 117, 48, 58,
+		{ 26, 90, 91, 92, 93, 94, 95,
+		  45, 55, 115, 46, 56, 116, 47, 57, 117, 48, 58, 49, 59,
 		  -1
 		},
-		{ 26, 90, 91, 92, 93, 94,
+		{ 26, 90, 91, 92, 93, 94, 95,
 		  25, 35, 27, 28, 29, 19, 130, 131, 132, 133,
+		  -1
+		},
+		{ 26, 90, 91, 92, 93, 94, 95,
+		  66, 76, 67, 77,
 		  -1
 		},
 	};
@@ -875,6 +890,8 @@ MenuBar_CreateGameControls(void)
 	 * 46, 56, 116  -- sidebar scale label, slider.
 	 * 47, 57, 117  -- viewport scale label, slider.
 	 * 48, 58       -- hardware effects label, off/on.  Only with the OpenGL driver.
+	 * 49, 59       -- radio voices label, off/on.
+	 * 66, 76, 67, 77 -- day and night label, off/on; sandstorms label, off/on.
 	 *
 	 * 60, 70   -- health bars label, off/on/always on.
 	 * 61, 71   -- hi-res overlays label, off/on.
@@ -891,7 +908,7 @@ MenuBar_CreateGameControls(void)
 	GUI_Window_Create(&g_gameControlWindowDesc);
 
 	/* Radio buttons. */
-	for (int page = 0; page < 5; page++) {
+	for (int page = 0; page < 6; page++) {
 		w = GUI_Widget_Allocate(90 + page, 0, 8 + 10 * page, g_widgetProperties[g_gameControlWindowDesc.index].height - 17, SHAPE_RADIO_BUTTON_OFF, STR_NULL);
 		w->parentID = g_gameControlWindowDesc.index;
 		w->clickProc = MenuBar_ClickRadioButton;
@@ -924,6 +941,9 @@ MenuBar_CreateGameControls(void)
 		{ 46, 1, "Sidebar Scale" },
 		{ 47, 2, "Viewport Scale" },
 		{ 48, 3, "Hardware effects" },
+		{ 49, VideoA5_HardwareEffectsAvailable() ? 4 : 3, "Radio voices" },
+		{ 66, 0, "Day and night" },
+		{ 67, 1, "Sandstorms" },
 		{ 60, 0, "Health bars" },
 		{ 61, 1, "Hi-res overlays" },
 		{ 62, 2, "Smooth unit animation" },
@@ -959,6 +979,9 @@ MenuBar_CreateGameControls(void)
 		{ 52, 2, 104 }, /* Scrolling edge. */
 		{ 53, 3,  46 }, /* Auto scroll. */
 		{ 58, 3,  64 }, /* Hardware effects. */
+		{ 59, VideoA5_HardwareEffectsAvailable() ? 4 : 3, 64 }, /* Radio voices. */
+		{ 76, 0,  64 }, /* Day and night. */
+		{ 77, 1,  64 }, /* Sandstorms. */
 		{ 70, 0,  64 }, /* Health bars. */
 		{ 71, 1,  64 }, /* Hi-res vector graphics. */
 		{ 72, 2,  64 }, /* Smooth unit animation. */
@@ -1227,6 +1250,9 @@ MenuBar_TickGameControls(void)
 		case 0x8000 | 52: g_gameConfig.scrollAlongScreenEdge ^= 0x1; break;
 		case 0x8000 | 53: g_gameConfig.autoScroll ^= 0x1; break;
 		case 0x8000 | 58: g_hardware_effects = !g_hardware_effects; break;
+		case 0x8000 | 59: g_radio_voices = !g_radio_voices; break;
+		case 0x8000 | 76: g_day_night = !g_day_night; break;
+		case 0x8000 | 77: g_sandstorms = !g_sandstorms; break;
 
 		case 0x8000 | 70: /* Health bars. */
 			w = GUI_Widget_Get_ByIndex(g_widgetLinkedListTail, 70);

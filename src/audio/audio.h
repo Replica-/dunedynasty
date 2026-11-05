@@ -30,6 +30,7 @@ extern float music_volume;
 extern float sound_volume;
 extern float cutscene_sound_volume;
 extern bool g_disable_attack_music;
+extern bool g_radio_voices; /* [audio] radio_voices: spoken lines when selecting and ordering units. */
 
 extern bool g_opl_mame;
 extern char sound_font_path[1024];
@@ -57,6 +58,9 @@ extern void Audio_PlayVoiceAtTile(enum VoiceID voiceID, uint16 packed);
 extern bool Audio_Poll(void);
 
 #include "audio_a5.h"
+
+extern bool Audio_PlayRadioVoice(int voiceSeed, enum RadioKind kind);
+extern void Audio_SetSandstormWind(float volume);
 
 #define Audio_PollMusic         AudioA5_PollMusic
 #define Audio_MusicIsPlaying    AudioA5_MusicIsPlaying

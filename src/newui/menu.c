@@ -20,6 +20,7 @@
 #include "scrollbar.h"
 #include "strategicmap.h"
 #include "../audio/audio.h"
+#include "../daynight.h"
 #include "../common_a5.h"
 #include "../config.h"
 #include "../cutscene.h"
@@ -418,6 +419,9 @@ Menu_LoadPalette(void)
 static void
 MainMenu_Initialise(Widget *w)
 {
+	/* Night may have turned fog of war on during the game. */
+	DayNight_RestoreFog();
+
 	Menu_LoadPalette();
 	Widget_SetCurrentWidget(0);
 

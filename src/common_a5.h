@@ -5,6 +5,7 @@
 #include "gfx.h"
 
 extern struct ALLEGRO_EVENT_QUEUE *g_a5_input_queue;
+extern bool g_headless; /* From --headless: no sound, and the window is hidden.  For automated tests. */
 
 extern void A5_InitTransform(bool screen_size_changed);
 extern void A5_SetMenuAlignLeft(bool left);

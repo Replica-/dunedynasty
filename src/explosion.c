@@ -579,7 +579,7 @@ Explosion_Uninit(void)
  */
 void Explosion_Start(uint16 explosionType, tile32 position, uint8 houseID)
 {
-	if (explosionType > EXPLOSION_SPICE_BLOOM_TREMOR) return;
+	if (explosionType > EXPLOSION_HIT_MEDIUM) return;
 
 	uint16 packed = Tile_PackTile(position);
 	Explosion_StopAtPosition(packed);
@@ -673,13 +673,13 @@ void Explosion_Tick(void)
 
 enum FxKind {
 	FX_NONE,
-	FX_SPARK,       /* Bullet impacts. */
+	FX_SPARK,       /* Muzzle flashes. */
+	FX_HIT,         /* A bullet hitting a unit. */
 	FX_BLAST_S,
 	FX_BLAST_M,
 	FX_BLAST_L,
 	FX_DUST,        /* Sand burst, spice bloom tremor. */
 	FX_GAS,         /* Deviator gas, coloured by house. */
-	FX_WORM,        /* Sandworm swallow. */
 	FX_FLAME,       /* Burning wreck, loops while the explosion lasts. */
 	FX_SMOKE,       /* Smoke plume, loops while the explosion lasts. */
 	FX_PRE,         /* Fireball while the explosion still waits for its first sprite. */
@@ -691,12 +691,12 @@ static const struct {
 	bool loop;
 } s_fx_info[FX_MAX] = {
 	[FX_SPARK]   = { 16, false },
-	[FX_BLAST_S] = { 34, false },
+	[FX_HIT]     = { 10, false },
+	[FX_BLAST_S] = { 20, false },
 	[FX_BLAST_M] = { 50, false },
 	[FX_BLAST_L] = { 70, false },
 	[FX_DUST]    = { 44, false },
 	[FX_GAS]     = { 90, false },
-	[FX_WORM]    = { 110, false },
 	[FX_FLAME]   = { 24, true },
 	[FX_SMOKE]   = { 40, true },
 	[FX_PRE]     = { 40, false },
@@ -723,6 +723,9 @@ static FxInstance s_fx[FX_MAX_INSTANCES];
 static enum FxKind
 Fx_Classify(int spriteID)
 {
+	if (spriteID & EXPLOSION_SPRITE_HIT)
+		return ((spriteID & ~EXPLOSION_SPRITE_HIT) == 153 || (spriteID & ~EXPLOSION_SPRITE_HIT) == 154) ? FX_HIT : FX_NONE;
+
 	switch (spriteID) {
 		case 153: case 154: return FX_SPARK;
 		case 183: case 184: return FX_BLAST_S;
@@ -736,9 +739,6 @@ Fx_Classify(int spriteID)
 		case 180: case 181: case 182: return FX_SMOKE;
 		default: break;
 	}
-
-	if (spriteID >= 213 && spriteID <= 222)
-		return FX_WORM;
 
 	return FX_NONE;
 }
@@ -835,14 +835,14 @@ Fx_SmokeColour(float shade)
  * t goes from 0 to 1, radius is in pixels.
  */
 static void
-Fx_DrawBlast(int bx, int by, float t, float radius, uint32 seed, int num)
+Fx_DrawBlast(int bx, int by, float t, float radius, uint32 seed, int num, bool smoke)
 {
 	static const unsigned char flash[] = { 255, 250, 210 };
 	static const unsigned char ring[] = { 255, 220, 150 };
 	static const unsigned char spark[] = { 255, 232, 150 };
 
 	/* Smoke under the fire. */
-	for (int i = 0; i < num / 2; i++) {
+	for (int i = 0; smoke && i < num / 2; i++) {
 		const float st = Fx_Clamp01((t - 0.25f - 0.2f * Fx_Rand(seed, i, 10)) / 0.75f);
 		const float angle = FX_TWO_PI * Fx_Rand(seed, i, 11);
 		const float spread = radius * (0.2f + 0.6f * Fx_Rand(seed, i, 12));
@@ -1076,13 +1076,16 @@ Fx_Draw(const FxInstance *fx, int64_t now)
 	const float t = Fx_Clamp01((float)age / duration);
 
 	switch (fx->kind) {
-		case FX_SPARK:   Fx_DrawBlast(x, y, t, 4.0f, fx->seed, 7); break;
-		case FX_BLAST_S: Fx_DrawBlast(x, y, t, 7.0f, fx->seed, 16); break;
-		case FX_BLAST_M: Fx_DrawBlast(x, y, t, 11.0f, fx->seed, 28); break;
-		case FX_PRE:     Fx_DrawBlast(x, y, t, 9.0f, fx->seed, 22); break;
-		case FX_BLAST_L: Fx_DrawBlast(x, y, t, 17.0f, fx->seed, 44); break;
+		/* Muzzle flashes (SPARK) keep their size.  Bullet impacts (BLAST_S) are a
+		 * puff without smoke.  Only deaths and structures get a fireball.
+		 */
+		case FX_SPARK:   Fx_DrawBlast(x, y, t, 4.0f, fx->seed, 7, false); break;
+		case FX_HIT:     Fx_DrawBlast(x, y, t, 2.5f, fx->seed, 4, false); break;
+		case FX_BLAST_S: Fx_DrawBlast(x, y, t, 5.0f, fx->seed, 9, false); break;
+		case FX_BLAST_M: Fx_DrawBlast(x, y, t, 11.0f, fx->seed, 28, true); break;
+		case FX_PRE:     Fx_DrawBlast(x, y, t, 9.0f, fx->seed, 22, true); break;
+		case FX_BLAST_L: Fx_DrawBlast(x, y, t, 17.0f, fx->seed, 44, true); break;
 		case FX_DUST:    Fx_DrawDust(x, y, t, 12.0f, 16, fx->seed); break;
-		case FX_WORM:    Fx_DrawDust(x, y, t, 18.0f, 30, fx->seed); break;
 		case FX_GAS:     Fx_DrawGas(x, y, t, fx->houseID, fx->seed); break;
 
 		case FX_FLAME:
@@ -1188,7 +1191,7 @@ Explosion_DrawHardware(void)
 
 		const enum FxKind kind = Fx_Classify(e->spriteID);
 		if (kind == FX_NONE) {
-			Shape_DrawRemap(e->spriteID, e->houseID, x, y, 2, 0xC000);
+			Shape_DrawRemap(e->spriteID & ~EXPLOSION_SPRITE_HIT, e->houseID, x, y, 2, 0xC000);
 			continue;
 		}
 
@@ -1236,7 +1239,7 @@ Explosion_Draw(void)
 		if (!Map_IsPositionInViewport(e->position, &x, &y))
 			continue;
 
-		Shape_DrawRemap(e->spriteID, e->houseID, x, y, 2, 0xC000);
+		Shape_DrawRemap(e->spriteID & ~EXPLOSION_SPRITE_HIT, e->houseID, x, y, 2, 0xC000);
 	}
 }
 

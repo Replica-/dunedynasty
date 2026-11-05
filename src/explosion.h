@@ -31,10 +31,17 @@ enum ExplosionType {
 	EXPLOSION_CARRYALL_CRASH      = 17,
 	EXPLOSION_MINI_ROCKET         = 18,
 	EXPLOSION_SPICE_BLOOM_TREMOR  = 19,
+	EXPLOSION_HIT_SMALL           = 20, /* Like IMPACT_SMALL/MEDIUM, but a bullet hitting a unit, not a muzzle flash. */
+	EXPLOSION_HIT_MEDIUM          = 21,
 
-	EXPLOSIONTYPE_MAX             = 20,
+	EXPLOSIONTYPE_MAX             = 22,
 	EXPLOSION_INVALID             = 0xFFFF
 };
+
+/* Set on the sprite of a unit hit, so the hardware effects can tell it from a
+ * muzzle flash, which uses the same sprites.  Mask it off to get the sprite.
+ */
+#define EXPLOSION_SPRITE_HIT 0x1000
 
 /**
  * The valid types for command in Explosion.

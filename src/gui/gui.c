@@ -19,6 +19,8 @@
 #include "widget.h"
 #include "../animation.h"
 #include "../audio/audio.h"
+#include "../daynight.h"
+#include "../sandstorm.h"
 #include "../codec/format80.h"
 #include "../common_a5.h"
 #include "../config.h"
@@ -1675,6 +1677,9 @@ GUI_String_Get_ByIndex(int16 stringID)
 		case -52: return (g_gameConfig.scrollAlongScreenEdge) ? "Screen" : "Viewport";
 		case -53: onoff = g_gameConfig.autoScroll; break;
 		case -58: onoff = g_hardware_effects; break;
+		case -59: onoff = g_radio_voices; break;
+		case -76: onoff = g_day_night; break;
+		case -77: onoff = g_sandstorms; break;
 
 		case -70:
 			if (enhancement_draw_health_bars == HEALTH_BAR_ALL_UNITS)

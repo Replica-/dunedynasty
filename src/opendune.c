@@ -28,6 +28,8 @@ extern int _al_mangled_main(int argc, char **argv);
 #include "animation.h"
 #include "audio/audio.h"
 #include "common_a5.h"
+#include "sandstorm.h"
+#include "daynight.h"
 #include "config.h"
 #include "crashlog/crashlog.h"
 #include "cutscene.h"
@@ -90,6 +92,7 @@ int    g_debugTestDeathHand = 0;
 bool   g_debugTestSpice = false;
 int    g_debugTestWorm = 0;
 bool   g_debugTestPanel = false;
+bool   g_debugTestOrders = false;
 int    g_debugTestColourMenu = 0;
 uint16 g_activeAction = 0xFFFF;      /*!< Action the controlled unit will do. */
 
@@ -664,11 +667,26 @@ int main(int argc, char **argv)
 			Unit_Debug_SetWormRespawnSeconds(10);
 		}
 
+		if (strcmp(argv[i], "--test-daynight") == 0)
+			g_debugTestDayNight = true;
+
+		if (strcmp(argv[i], "--sandstorm-now") == 0)
+			g_debugSandstormNow = true;
+
+		if (strcmp(argv[i], "--test-sandstorm") == 0)
+			g_debugTestSandstorm = true;
+
+		if (strcmp(argv[i], "--headless") == 0)
+			g_headless = true;
+
 		if (strcmp(argv[i], "--no-gl-post") == 0)
 			g_gl_post_fx_off_cli = true;
 
 		if (strcmp(argv[i], "--gl-post") == 0)
 			g_gl_post_fx_cli = true;
+
+		if (strcmp(argv[i], "--test-orders") == 0)
+			g_debugTestOrders = true;
 
 		if (strcmp(argv[i], "--test-panel") == 0)
 			g_debugTestPanel = true;
@@ -705,6 +723,8 @@ int main(int argc, char **argv)
 			else if (strcasecmp(name, "ordos") == 0) g_startHouse = HOUSE_ORDOS;
 		} else if (strcmp(argv[i], "--mission") == 0) {
 			g_startMission = atoi(argv[++i]);
+		} else if (strcmp(argv[i], "--time-of-day") == 0) {
+			g_debugTimeOfDay = (float)atof(argv[++i]);
 		} else if (strcmp(argv[i], "--region") == 0) {
 			g_startRegion = atoi(argv[++i]);
 		}

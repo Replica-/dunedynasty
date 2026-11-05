@@ -35,6 +35,7 @@ enum SoundEffectSources g_enable_sound_effects = SOUNDEFFECTS_SYNTH_AND_SAMPLES;
 bool g_enable_voices = true;
 bool g_enable_subtitles = false;
 bool g_disable_attack_music = false;
+bool g_radio_voices = true;
 
 float music_volume = 0.85f;
 float sound_volume = 0.65f;
@@ -677,4 +678,34 @@ Audio_Poll(void)
 	}
 
 	return playing;
+}
+
+/**
+ * Say a radio line for a unit, if the option is on and there are voice files.
+ * The unit keeps the same voice, picked from voiceSeed.
+ * @return True if a line was played, false to fall back to the original sample.
+ */
+bool
+Audio_PlayRadioVoice(int voiceSeed, enum RadioKind kind)
+{
+	if (!g_radio_voices || !g_enable_audio ||
+			g_enable_sound_effects == SOUNDEFFECTS_NONE ||
+			g_enable_sound_effects == SOUNDEFFECTS_SYNTH_ONLY)
+		return false;
+
+	return AudioA5_PlayRadio(voiceSeed, kind, 1.0f);
+}
+
+/**
+ * Set the volume of the sandstorm wind, from 0 (stops it) up.  Call every frame.
+ */
+void
+Audio_SetSandstormWind(float volume)
+{
+	if (!g_enable_audio ||
+			g_enable_sound_effects == SOUNDEFFECTS_NONE ||
+			g_enable_sound_effects == SOUNDEFFECTS_SYNTH_ONLY)
+		volume = 0.0f;
+
+	AudioA5_SetWind(volume);
 }

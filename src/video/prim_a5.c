@@ -1,6 +1,7 @@
 /* prim_a5.c */
 
 #include <assert.h>
+#include <math.h>
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_primitives.h>
 
@@ -126,6 +127,97 @@ Prim_SetAdditive(bool additive)
 	al_set_blender(ALLEGRO_ADD, ALLEGRO_ALPHA, additive ? ALLEGRO_ONE : ALLEGRO_INVERSE_ALPHA);
 }
 
+
+void
+Prim_SetBlend(enum PrimBlend mode)
+{
+	switch (mode) {
+		case PRIM_BLEND_NORMAL:
+			al_set_blender(ALLEGRO_ADD, ALLEGRO_ALPHA, ALLEGRO_INVERSE_ALPHA);
+			break;
+
+		case PRIM_BLEND_ADDITIVE:
+			al_set_blender(ALLEGRO_ADD, ALLEGRO_ALPHA, ALLEGRO_ONE);
+			break;
+
+		case PRIM_BLEND_REPLACE:
+			/* Overlapping shapes do not add up: the last one wins. */
+			al_set_blender(ALLEGRO_ADD, ALLEGRO_ONE, ALLEGRO_ZERO);
+			break;
+
+		case PRIM_BLEND_PUNCH:
+			/* Leaves the colour alone, and takes the shape's alpha away
+			 * from the alpha already there.  Makes holes in a layer.
+			 */
+			al_set_separate_blender(ALLEGRO_ADD, ALLEGRO_ZERO, ALLEGRO_ONE,
+					ALLEGRO_DEST_MINUS_SRC, ALLEGRO_ONE, ALLEGRO_ONE);
+			break;
+	}
+}
+
+/*--------------------------------------------------------------*/
+
+/* Offscreen layers, in the pixels of the viewport, which are drawn over the
+ * scene afterwards.  Used for shadows and for the darkness of the night.
+ */
+
+static ALLEGRO_BITMAP *s_layer[PRIM_NUM_LAYERS];
+static ALLEGRO_BITMAP *s_layerPrevTarget;
+static ALLEGRO_TRANSFORM s_layerPrevTransform;
+static int s_layerClip[4];
+
+bool
+Prim_LayerBegin(enum PrimLayer layer, int w, int h, unsigned char r, unsigned char g, unsigned char b, unsigned char a)
+{
+	ALLEGRO_BITMAP **bmp = &s_layer[layer];
+
+	if (*bmp != NULL && (al_get_bitmap_width(*bmp) != w || al_get_bitmap_height(*bmp) != h)) {
+		al_destroy_bitmap(*bmp);
+		*bmp = NULL;
+	}
+
+	if (*bmp == NULL) {
+		const int old_flags = al_get_new_bitmap_flags();
+
+		al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP | ALLEGRO_NO_PRESERVE_TEXTURE);
+		*bmp = al_create_bitmap(w, h);
+		al_set_new_bitmap_flags(old_flags);
+
+		if (*bmp == NULL)
+			return false;
+	}
+
+	s_layerPrevTarget = al_get_target_bitmap();
+	al_copy_transform(&s_layerPrevTransform, al_get_current_transform());
+	al_get_clipping_rectangle(&s_layerClip[0], &s_layerClip[1], &s_layerClip[2], &s_layerClip[3]);
+
+	al_set_target_bitmap(*bmp);
+
+	ALLEGRO_TRANSFORM identity;
+	al_identity_transform(&identity);
+	al_use_transform(&identity);
+	al_set_clipping_rectangle(0, 0, w, h);
+
+	al_clear_to_color(al_map_rgba(r, g, b, a));
+	return true;
+}
+
+void
+Prim_LayerEnd(void)
+{
+	Prim_SetBlend(PRIM_BLEND_NORMAL);
+
+	al_set_target_bitmap(s_layerPrevTarget);
+	al_use_transform(&s_layerPrevTransform);
+	al_set_clipping_rectangle(s_layerClip[0], s_layerClip[1], s_layerClip[2], s_layerClip[3]);
+}
+
+void
+Prim_LayerDraw(enum PrimLayer layer, int x, int y)
+{
+	if (s_layer[layer] != NULL)
+		al_draw_bitmap(s_layer[layer], x, y, 0);
+}
 /*--------------------------------------------------------------*/
 
 #if 0
@@ -267,4 +359,74 @@ Prim_DrawBorder(float x, float y, float w, float h, int thickness, bool outline,
 	}
 
 	al_draw_indexed_prim(vtx, NULL, NULL, &idx[start], end - start, ALLEGRO_PRIM_TRIANGLE_LIST);
+}
+
+/*--------------------------------------------------------------*/
+
+/* Reading pixels back from what has been drawn so far.  A rectangle of the
+ * current target, given in the units of the current transform, is locked, and
+ * single pixels can then be read from it until Prim_GrabEnd().  Nothing can be
+ * drawn in between.
+ */
+
+static ALLEGRO_BITMAP *s_grabBitmap;
+static ALLEGRO_TRANSFORM s_grabTransform;
+static int s_grabRegion[4];
+
+bool
+Prim_GrabBegin(int x, int y, int w, int h)
+{
+	ALLEGRO_BITMAP *target = al_get_target_bitmap();
+
+	if (target == NULL || s_grabBitmap != NULL)
+		return false;
+
+	al_copy_transform(&s_grabTransform, al_get_current_transform());
+
+	float x1 = (float)x, y1 = (float)y, x2 = (float)(x + w), y2 = (float)(y + h);
+	al_transform_coordinates(&s_grabTransform, &x1, &y1);
+	al_transform_coordinates(&s_grabTransform, &x2, &y2);
+
+	int rx1 = (int)floorf(x1 < x2 ? x1 : x2), ry1 = (int)floorf(y1 < y2 ? y1 : y2);
+	int rx2 = (int)ceilf(x1 < x2 ? x2 : x1), ry2 = (int)ceilf(y1 < y2 ? y2 : y1);
+
+	if (rx1 < 0) rx1 = 0;
+	if (ry1 < 0) ry1 = 0;
+	if (rx2 > al_get_bitmap_width(target)) rx2 = al_get_bitmap_width(target);
+	if (ry2 > al_get_bitmap_height(target)) ry2 = al_get_bitmap_height(target);
+
+	if (rx2 <= rx1 || ry2 <= ry1)
+		return false;
+
+	if (al_lock_bitmap_region(target, rx1, ry1, rx2 - rx1, ry2 - ry1, ALLEGRO_PIXEL_FORMAT_ANY, ALLEGRO_LOCK_READONLY) == NULL)
+		return false;
+
+	s_grabBitmap = target;
+	s_grabRegion[0] = rx1; s_grabRegion[1] = ry1; s_grabRegion[2] = rx2; s_grabRegion[3] = ry2;
+	return true;
+}
+
+bool
+Prim_GrabPixel(float x, float y, unsigned char *rgb)
+{
+	if (s_grabBitmap == NULL)
+		return false;
+
+	al_transform_coordinates(&s_grabTransform, &x, &y);
+
+	const int px = (int)floorf(x), py = (int)floorf(y);
+	if (px < s_grabRegion[0] || py < s_grabRegion[1] || px >= s_grabRegion[2] || py >= s_grabRegion[3])
+		return false;
+
+	al_unmap_rgb(al_get_pixel(s_grabBitmap, px, py), &rgb[0], &rgb[1], &rgb[2]);
+	return true;
+}
+
+void
+Prim_GrabEnd(void)
+{
+	if (s_grabBitmap != NULL) {
+		al_unlock_bitmap(s_grabBitmap);
+		s_grabBitmap = NULL;
+	}
 }

@@ -26,6 +26,30 @@ extern void Prim_FillRect_RGBA(float x1, float y1, float x2, float y2, unsigned 
 /* Additive blending (glowing fire) for the following primitives, or back to normal alpha blending. */
 extern void Prim_SetAdditive(bool additive);
 
+enum PrimBlend {
+	PRIM_BLEND_NORMAL,
+	PRIM_BLEND_ADDITIVE,
+	PRIM_BLEND_REPLACE,
+	PRIM_BLEND_PUNCH
+};
+
+extern void Prim_SetBlend(enum PrimBlend mode);
+
+enum PrimLayer {
+	PRIM_LAYER_SHADOW,
+	PRIM_LAYER_DARK,
+	PRIM_NUM_LAYERS
+};
+
+/* Draw into a layer of w x h pixels, cleared to the colour, until Prim_LayerEnd(). */
+extern bool Prim_LayerBegin(enum PrimLayer layer, int w, int h, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+extern void Prim_LayerEnd(void);
+extern void Prim_LayerDraw(enum PrimLayer layer, int x, int y);
+
+extern bool Prim_GrabBegin(int x, int y, int w, int h);
+extern bool Prim_GrabPixel(float x, float y, unsigned char *rgb);
+extern void Prim_GrabEnd(void);
+
 extern void Prim_DrawBorder(float x, float y, float w, float h, int thickness, bool outline, bool fill, int colour_scheme);
 
 #endif

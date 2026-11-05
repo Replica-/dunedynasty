@@ -16,6 +16,7 @@ set(DUNEDYNASTY_SRC_FILES
 	src/config_a5.c
 	src/crashlog/crashlog_none.c
 	src/cutscene.c
+	src/daynight.c
 	src/enhancement.c
 	src/explosion.c
 	src/file.c
@@ -76,6 +77,7 @@ set(DUNEDYNASTY_SRC_FILES
 	src/saveload/team.c
 	src/saveload/unit.c
 	src/scenario.c
+	src/sandstorm.c
 	src/script/general.c
 	src/script/script.c
 	src/script/structure.c

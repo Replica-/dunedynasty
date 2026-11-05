@@ -16,6 +16,7 @@
 #include "video/video_a5.h"
 
 ALLEGRO_EVENT_QUEUE *g_a5_input_queue;
+bool g_headless = false;
 
 static ALLEGRO_BITMAP *s_transform[SCREENDIV_MAX];
 static enum ScreenDivID curr_transform;

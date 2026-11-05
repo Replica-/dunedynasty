@@ -631,13 +631,12 @@ uint16 Script_Unit_Fire(ScriptEngine *script)
 
 	distance = Object_GetDistanceToEncoded(&u->o, target);
 
-	/* Replica: a worm eats whatever is more or less under it.  Its fire
-	 * distance is 0, so it would have to be exactly on top of the unit, which
-	 * a moving unit never allows a slow worm to be.
-	 */
-	const uint16 maxDistance = (u->o.type == UNIT_SANDWORM) ? 384 : (ui->fireDistance << 8);
-
-	if ((int16)maxDistance < (int16)distance) return 0;
+	/* Replica: a worm only eats a unit on the tile it is on. */
+	if (u->o.type == UNIT_SANDWORM) {
+		if (Tile_PackTile(u->o.position) != Tile_PackTile(Tools_Index_GetTile(target))) return 0;
+	} else if ((int16)(ui->fireDistance << 8) < (int16)distance) {
+		return 0;
+	}
 
 	if (u->o.type != UNIT_SANDWORM && (Tools_Index_GetType(target) != IT_UNIT || g_table_unitInfo[Tools_Index_GetUnit(target)->o.type].movementType != MOVEMENT_WINGER)) {
 		int16 diff = 0;
@@ -1015,7 +1014,7 @@ uint16 Script_Unit_GetInfo(ScriptEngine *script)
 	switch (STACK_PEEK(1)) {
 		case 0x00: return u->o.hitpoints * 256 / ui->o.hitpoints;
 		case 0x01: return Tools_Index_IsValid(u->targetMove) ? u->targetMove : 0;
-		case 0x02: return (u->o.type == UNIT_SANDWORM) ? 384 : (ui->fireDistance << 8); /* Worms eat what is under them, see Script_Unit_Fire. */
+		case 0x02: return (u->o.type == UNIT_SANDWORM) ? 128 : (ui->fireDistance << 8); /* Worms try to eat within half a tile, but only on their own tile, see Script_Unit_Fire. */
 		case 0x03: return u->o.index;
 		case 0x04: return u->orientation[0].current;
 		case 0x05: return u->targetAttack;

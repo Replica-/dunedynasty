@@ -166,7 +166,7 @@ endif()
 # Copy general static files
 file(GLOB STATIC_DOC_FILES "${CMAKE_SOURCE_DIR}/LICENSE.txt" "${CMAKE_SOURCE_DIR}/README.txt"  "${CMAKE_SOURCE_DIR}/CHANGES.txt" "${CMAKE_SOURCE_DIR}/enhancement.txt" "${CMAKE_SOURCE_DIR}/static/general/dunedynasty.cfg-sample")
 file(GLOB STATIC_LICENCE_FOLDER "${CMAKE_SOURCE_DIR}/licences")
-file(GLOB STATIC_RESOURCE_FOLDERS "${CMAKE_SOURCE_DIR}/static/general/campaign" "${CMAKE_SOURCE_DIR}/static/general/data" "${CMAKE_SOURCE_DIR}/static/general/gfx" "${CMAKE_SOURCE_DIR}/static/general/music")
+file(GLOB STATIC_RESOURCE_FOLDERS "${CMAKE_SOURCE_DIR}/static/general/campaign" "${CMAKE_SOURCE_DIR}/static/general/data" "${CMAKE_SOURCE_DIR}/static/general/gfx" "${CMAKE_SOURCE_DIR}/static/general/music" "${CMAKE_SOURCE_DIR}/static/general/radio" "${CMAKE_SOURCE_DIR}/static/general/sfx")
 file(COPY ${STATIC_DOC_FILES} DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/dist")
 file(COPY ${STATIC_LICENCE_FOLDER} DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/dist")
 if(CMAKE_MACOSX_BUNDLE)

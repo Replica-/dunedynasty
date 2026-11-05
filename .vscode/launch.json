@@ -154,6 +154,150 @@
         { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
       ],
       "presentation": { "group": "5 OpenGL", "order": 1 }
+    },
+
+    // ─────────────────  👀 Show me: effects and voices  ─────────────────
+    // Visible, with sound.  Mission 5 as Atreides has units to click and fight
+    // with.  The hardware effects (explosions, smoke, sandstorms) need the OpenGL
+    // driver and Options > Game Controls > Hardware effects on; radio voices are
+    // Options > Game Controls > Radio voices.
+
+    {
+      "name": "🌪️ Show: sandstorm (stays on)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "5", "--sandstorm-now"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "6 Show me", "order": 1 }
+    },
+    {
+      "name": "🔨🌪️ Build + Show: sandstorm (stays on)",
+      "type": "cppdbg",
+      "request": "launch",
+      "preLaunchTask": "UCRT64 Build",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "5", "--sandstorm-now"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "6 Show me", "order": 2 }
+    },
+    {
+      "name": "💥 Show: Mission 5 (explosions, smoke, radio voices)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "5"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "6 Show me", "order": 3 }
+    },
+    {
+      "name": "☠️ Show: Death Hand impact (explosions, toxic cloud)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "5", "--test-deathhand"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "6 Show me", "order": 4 }
+    },
+    {
+      "name": "🌙 Show: night (headlights, fog of war)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "5", "--time-of-day", "0.75"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "6 Show me", "order": 6 }
+    },
+    {
+      "name": "🌅 Show: low sun (long shadows)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "5", "--time-of-day", "0.1"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "6 Show me", "order": 7 }
+    },
+    {
+      "name": "🌪️🌙 Show: night + sandstorm (units see 2 tiles)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "5", "--time-of-day", "0.75", "--sandstorm-now"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "6 Show me", "order": 8 }
+    },
+    {
+      "name": "🐛 Show: sandworm behaviour (--test-worm)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "5", "--test-worm"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "6 Show me", "order": 5 }
     }
   ]
 }

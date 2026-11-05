@@ -25,6 +25,9 @@
 #endif /* __APPLE__ */
 
 #include <allegro5/allegro.h>
+#ifdef _WIN32
+# include <allegro5/allegro_windows.h>
+#endif
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_primitives.h>
 
@@ -153,7 +156,8 @@ static const struct {
 	{ 0, 0 }, { 5, 0 }, { 8, 5 }, { 5, 8 }, { 0, 5 }, { 8, 8 }
 };
 
-enum GraphicsDriver g_graphics_driver;
+/* OpenGL is the only driver: the Direct3D and software paths are no longer selectable. */
+enum GraphicsDriver g_graphics_driver = GRAPHICS_DRIVER_OPENGL;
 
 /* Exposed for prim_a5.c. */
 ALLEGRO_COLOR paltoRGB[256];
@@ -188,7 +192,7 @@ bool g_hardware_effects = true;
 bool
 VideoA5_HardwareEffectsAvailable(void)
 {
-	return g_graphics_driver == GRAPHICS_DRIVER_OPENGL;
+	return true;   /* Always OpenGL. */
 }
 
 bool
@@ -515,18 +519,9 @@ VideoA5_Init(void)
 
 	flags_str[0] = '\0';
 
-	switch (g_graphics_driver) {
-		case GRAPHICS_DRIVER_OPENGL:
-		default:
-			APPEND_FLAG(ALLEGRO_OPENGL);
-			break;
-
-#ifdef ALLEGRO_WINDOWS
-		case GRAPHICS_DRIVER_DIRECT3D:
-			APPEND_FLAG(ALLEGRO_DIRECT3D);
-			break;
-#endif
-	}
+	/* Always OpenGL, whatever an old config file says. */
+	g_graphics_driver = GRAPHICS_DRIVER_OPENGL;
+	APPEND_FLAG(ALLEGRO_OPENGL);
 
 	/* Shaders need the programmable pipeline, which is only requested when
 	 * the post-processing is on so the default rendering is unchanged.
@@ -541,6 +536,16 @@ VideoA5_Init(void)
 	else
 		g_gl_post_fx = false;
 
+	if (g_headless) {
+		/* No fullscreen, which could not be hidden. */
+		g_gameConfig.windowMode = WM_WINDOWED;
+
+		/* Never appear on the screen, not even for the moment before the window is hidden:
+		 * a frameless window created far off to the side.
+		 */
+		al_set_new_window_position(-32000, -32000);
+	}
+
 	if (g_gameConfig.windowMode == WM_FULLSCREEN) {
 		APPEND_FLAG(ALLEGRO_FULLSCREEN);
 	} else if (g_gameConfig.windowMode == WM_FULLSCREEN_WINDOW) {
@@ -549,6 +554,9 @@ VideoA5_Init(void)
 		APPEND_FLAG(ALLEGRO_WINDOWED);
 		// APPEND_FLAG(ALLEGRO_RESIZABLE); // TODO: make resizable
 	}
+
+	if (g_headless)
+		display_flags |= ALLEGRO_FRAMELESS;
 
 	al_set_new_display_flags(display_flags);
 	al_set_new_display_option(ALLEGRO_VSYNC, 1, ALLEGRO_SUGGEST);
@@ -563,6 +571,15 @@ VideoA5_Init(void)
 	}
 
 	al_set_window_title(display, DUNE_DYNASTY_STR);
+
+	/* Headless: the game still renders (screenshots work), but nothing shows. */
+	if (g_headless) {
+#ifdef _WIN32
+		ShowWindow(al_get_win_window_handle(display), SW_HIDE);
+#else
+		al_set_window_position(display, -32000, -32000);
+#endif
+	}
 
 	/* al_set_new_bitmap_flags(ALLEGRO_MAG_LINEAR); */
 	TRUE_DISPLAY_WIDTH = al_get_display_width(display);

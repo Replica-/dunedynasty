@@ -14,6 +14,8 @@
 #include "config.h"
 
 #include "audio/audio.h"
+#include "daynight.h"
+#include "sandstorm.h"
 #include "enhancement.h"
 #include "file.h"
 #include "gfx.h"
@@ -134,7 +136,6 @@ static const GameOption s_game_option[] = {
 	{ "game",   "campaign",         CONFIG_CAMPAIGN,.d._int = &g_campaign_selected },
 	{ "game",   "house_colour",     CONFIG_STRING,  .d._string = g_house_colour },
 
-	{ "graphics",   "driver",           CONFIG_GRAPHICS_DRIVER, .d._graphics_driver = &g_graphics_driver },
 	{ "graphics",   "window_mode",      CONFIG_WINDOW_MODE,     .d._window_mode = &g_gameConfig.windowMode },
 	{ "graphics",   "screen_width",     CONFIG_INT,             .d._int = &g_gameConfig.displayMode.width },
 	{ "graphics",   "screen_height",    CONFIG_INT,             .d._int = &g_gameConfig.displayMode.height },
@@ -144,6 +145,8 @@ static const GameOption s_game_option[] = {
 	{ "graphics",   "viewport_scale",   CONFIG_FLOAT_1_8,       .d._float = &g_screenDiv[SCREENDIV_VIEWPORT].scalex },
 	{ "graphics",   "hardware_cursor",  CONFIG_BOOL,            .d._bool = &g_gameConfig.hardwareCursor },
 	{ "graphics",   "gl_post_fx",       CONFIG_BOOL,            .d._bool = &g_gl_post_fx },
+	{ "graphics",   "day_night",        CONFIG_BOOL,            .d._bool = &g_day_night },
+	{ "graphics",   "sandstorms",       CONFIG_BOOL,            .d._bool = &g_sandstorms },
 	{ "graphics",   "hardware_effects", CONFIG_BOOL,            .d._bool = &g_hardware_effects },
 
 	{ "controls",   "auto_scroll",              CONFIG_BOOL,    .d._bool = &g_gameConfig.autoScroll },
@@ -165,6 +168,7 @@ static const GameOption s_game_option[] = {
 	{ "audio",  "midi_device_id",   CONFIG_INT,  	.d._int = &g_midi_device_id },
 	{ "audio",  "midi_format",     	CONFIG_MIDI_FORMAT,  	.d._midi_format = &g_midi_format },
 	{ "audio",  "disable_attack_music",     CONFIG_BOOL,    .d._bool = &g_disable_attack_music },
+	{ "audio",  "radio_voices",     CONFIG_BOOL,    .d._bool = &g_radio_voices },
 
 	{ "music",  "dune2_adlib",      	CONFIG_BOOL,    .d._bool = &g_table_music_set[MUSICSET_DUNE2_ADLIB].enable },
 	{ "music",  "dune2_midi",       	CONFIG_BOOL,    .d._bool = &g_table_music_set[MUSICSET_DUNE2_MIDI].enable },
@@ -865,8 +869,8 @@ GameOptions_Load(void)
 	TRUE_DISPLAY_HEIGHT = g_gameConfig.displayMode.height;
 }
 
-void
-GameOptions_Save(void)
+static void
+GameOptions_SaveRaw(void)
 {
 	char filename[PATH_MAX];
 
@@ -953,4 +957,12 @@ GameOptions_Save(void)
 	snprintf(filename, sizeof(filename), "%s/%s", g_personal_data_dir, CONFIG_FILENAME);
 #pragma GCC diagnostic pop
 	al_save_config_file(filename, s_configFile);
+}
+
+/* Night turns fog of war on while playing, which is not the player's setting to keep. */
+void
+GameOptions_Save(void)
+{
+	DayNight_RestoreFog();
+	GameOptions_SaveRaw();
 }

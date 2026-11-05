@@ -44,6 +44,8 @@
 #include "tile.h"
 #include "timer/timer.h"
 #include "tools/coord.h"
+#include "tools/random_lcg.h"
+#include "net/client.h"
 #include "tools/encoded_index.h"
 #include "tools/orientation.h"
 #include "tools/random_general.h"
@@ -549,6 +551,150 @@ Unit_DebugTestPanel(void)
 	(void)enemyIndex;
 }
 
+/* Debug test (--test-orders): play with the player's units as someone clicking
+ * would.  Every half second a unit is selected, which says its selection line,
+ * and sent to a random place nearby, which says its acknowledgement, and the view
+ * follows it.  Survives a few minutes, then quits.  A crash fails the test.
+ */
+void
+Unit_DebugTestOrders(void)
+{
+	static int state = 0;
+	static int64_t startTick, nextTick;
+	static int orders = 0;
+
+	if (state == 0) {
+		startTick = g_timerGame;
+		nextTick = g_timerGame + 120;
+		state = 1;
+		return;
+	}
+
+	/* A line every ten seconds, so a stuck game shows where it got to. */
+	static int64_t nextLog = 0;
+
+	if (g_timerGame >= nextLog) {
+		FILE *log = fopen("orders_test.log", "a");
+
+		nextLog = g_timerGame + 600;
+
+		if (log != NULL) {
+			PoolFindStruct findLog;
+			int mine = 0, others = 0;
+
+			for (Unit *e = Unit_FindFirst(&findLog, HOUSE_INVALID, UNIT_INVALID); e != NULL; e = Unit_FindNext(&findLog)) {
+				if (e->o.houseID == g_playerHouseID) mine++; else others++;
+			}
+
+			fprintf(log, "t=%ds orders=%d mode=%d overlay=%d player units=%d other units=%d\n",
+					(int)((g_timerGame - startTick) / 60), orders, (int)g_gameMode, (int)g_gameOverlay, mine, others);
+			fclose(log);
+		}
+	}
+
+	/* The player lost everything: that is the end of the game, not a hang. */
+	if (g_gameMode != GM_NORMAL || g_gameOverlay == GAMEOVERLAY_LOSE || g_gameOverlay == GAMEOVERLAY_WIN
+			|| g_timerGame - startTick > 60 * 150) {
+		FILE *log = fopen("orders_test.log", "a");
+
+		if (log != NULL) {
+			fprintf(log, "finished: %d orders given, game mode %d\n", orders, (int)g_gameMode);
+			fclose(log);
+		}
+
+		exit(0);
+	}
+
+	if (g_timerGame < nextTick)
+		return;
+
+	nextTick = g_timerGame + 30;
+
+	PoolFindStruct find;
+	Unit *candidates[64];
+	int count = 0;
+
+	for (Unit *u = Unit_FindFirst(&find, g_playerHouseID, UNIT_INVALID);
+			u != NULL && count < 64;
+			u = Unit_FindNext(&find)) {
+		if (u->o.flags.s.isNotOnMap || u->o.type == UNIT_SANDWORM || !g_table_unitInfo[u->o.type].flags.isNormalUnit)
+			continue;
+
+		candidates[count++] = u;
+	}
+
+	if (count == 0)
+		return;
+
+	Unit *u = candidates[Tools_RandomLCG_Range(0, count - 1)];
+
+	/* Now and then, a few enemy tanks next to it that hunt, so there is a fight:
+	 * bullets, hits, explosions and wrecks.
+	 */
+	if ((orders % 60) == 0) {
+		const enum HouseType enemyHouse = (g_playerHouseID == HOUSE_HARKONNEN) ? HOUSE_ATREIDES : HOUSE_HARKONNEN;
+		const int bx = Tile_GetPackedX(Tile_PackTile(u->o.position));
+		const int by = Tile_GetPackedY(Tile_PackTile(u->o.position));
+
+		for (int i = 0; i < 3; i++) {
+			const int ex = bx + 3 + i, ey = by + (i - 1) * 2;
+
+			if (ex < 0 || ey < 0 || ex >= MAP_SIZE_MAX || ey >= MAP_SIZE_MAX)
+				continue;
+
+			Unit *enemy = Unit_Create(UNIT_INDEX_INVALID, UNIT_TANK, enemyHouse, Tile_Center(Tile_UnpackTile(Tile_PackXY(ex, ey))), 0);
+
+			if (enemy != NULL) {
+				enemy->o.seenByHouses = 0xFF;
+				Unit_Server_SetAction(enemy, ACTION_HUNT);
+			}
+		}
+	}
+
+	Unit_UnselectAll();
+	Unit_Select(u);
+	GUI_ChangeSelectionType(SELECTIONTYPE_UNIT);
+
+	/* Every other order is an attack on the nearest enemy unit. */
+	if ((orders & 1) == 1) {
+		Unit *nearest = NULL;
+		uint16 best = 0xFFFF;
+
+		for (Unit *e = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_INVALID); e != NULL; e = Unit_FindNext(&find)) {
+			if (e->o.houseID == g_playerHouseID || e->o.flags.s.isNotOnMap || e->o.type == UNIT_SANDWORM)
+				continue;
+
+			const uint16 d = Tile_GetDistanceRoundedUp(u->o.position, e->o.position);
+
+			if (d < best) {
+				best = d;
+				nearest = e;
+			}
+		}
+
+		if (nearest != NULL) {
+			Client_Send_IssueUnitAction(ACTION_ATTACK, Tools_Index_Encode(nearest->o.index, IT_UNIT), &u->o);
+			Audio_PlayRadioVoice(u->o.index, RADIO_ACKNOWLEDGE);
+			orders++;
+			return;
+		}
+	}
+
+	const int x = Tile_GetPackedX(Tile_PackTile(u->o.position)) + (int)Tools_RandomLCG_Range(0, 12) - 6;
+	const int y = Tile_GetPackedY(Tile_PackTile(u->o.position)) + (int)Tools_RandomLCG_Range(0, 12) - 6;
+
+	if (x >= 0 && y >= 0 && x < MAP_SIZE_MAX && y < MAP_SIZE_MAX) {
+		const uint16 packed = Tile_PackXY(x, y);
+
+		Client_Send_IssueUnitAction(ACTION_MOVE, Tools_Index_Encode(packed, IT_TILE), &u->o);
+		Audio_PlayRadioVoice(u->o.index, RADIO_ACKNOWLEDGE);
+		orders++;
+	}
+
+	Map_CentreViewport(TILE_SIZE * Tile_GetPackedX(Tile_PackTile(u->o.position)),
+			TILE_SIZE * Tile_GetPackedY(Tile_PackTile(u->o.position)));
+}
+
 /* Debug test (--test-worm): put worms with each of the three behaviours next
  * to a stationary and to a moving tank, all on sand, and log what the worms
  * do about it to worm_test.log.  --test-worm-harvesters instead gives the
@@ -664,7 +810,7 @@ Unit_DebugTestWorm(void)
 			wormIndex[i] = (worm != NULL) ? worm->o.index : UNIT_INDEX_INVALID;
 
 			if (worm != NULL) {
-				worm->amount = 3;
+				worm->amount = 2;
 				worm->o.seenByHouses = 0xFF;
 				Unit_Server_SetAction(worm, actions[0]); /* All hunt, as the game's own worms do. */
 			}
@@ -790,8 +936,8 @@ Unit_DebugTestWorm(void)
 	}
 }
 
-/* Replica: when the sandworms are all gone, a couple come back after two to
- * three minutes, hunting.  With many harvesters (the worm threat is high) the
+/* Replica: when the sandworms are all gone, a couple come back after six to
+ * eight minutes, hunting.  With many harvesters (the worm threat is high) the
  * worms are spawned elsewhere, up to one per harvester, so this only applies
  * when it is not.  It only brings worms back to a map that had some, and not
  * in the first three missions.
@@ -833,7 +979,7 @@ Unit_SandwormRespawn(void)
 		return;
 
 	if (respawnAt == 0) {
-		const int seconds = (s_wormRespawnTestSeconds > 0) ? s_wormRespawnTestSeconds : 120 + (Tools_Random_256() % 61);
+		const int seconds = (s_wormRespawnTestSeconds > 0) ? s_wormRespawnTestSeconds : 360 + (Tools_Random_256() % 121);
 
 		respawnAt = g_timerGame + 60 * seconds;
 		return;
@@ -849,7 +995,7 @@ Unit_SandwormRespawn(void)
 		Unit *unit = Unit_CreateWrapper(HOUSE_FREMEN, UNIT_SANDWORM, 0);
 
 		if (unit != NULL && unit->o.type == UNIT_SANDWORM) {
-			unit->amount = 3;
+			unit->amount = 2;
 			Unit_Server_SetAction(unit, ACTION_HUNT);
 			unit->o.seenByHouses = 0xFF;
 		}
@@ -879,12 +1025,23 @@ void GameLoop_Unit(void)
 	const int harvestor_count = Unit_CountUnits(g_playerHouseID, UNIT_HARVESTER);
 	
 	// Harvestor count is more than 3 smash the map with worms
-	if (harvestor_count > 3) {
+	static int64_t s_nextHarvesterWorm = 0;
+	static int64_t s_harvesterWormScenario = -1;
+
+	if (s_harvesterWormScenario != g_tickScenarioStart) {
+		s_harvesterWormScenario = g_tickScenarioStart;
+		s_nextHarvesterWorm = 0;
+	}
+
+	if (harvestor_count > 3 && g_timerGame >= s_nextHarvesterWorm) {
 		const int worm_count = Unit_CountUnits(HOUSE_FREMEN, UNIT_SANDWORM);
-			
+
 		if (worm_count < harvestor_count) {
 			Unit *unit = Unit_CreateWrapper(HOUSE_FREMEN, UNIT_SANDWORM, 0);
-			
+
+			/* Replica: at most one new worm every four to five minutes. */
+			s_nextHarvesterWorm = g_timerGame + 60 * (240 + (Tools_Random_256() % 61));
+
 			// Replica Sandworm default is hunt mode
 			if (unit && unit->o.type == UNIT_SANDWORM) {
 				Unit_Server_SetAction(unit, ACTION_HUNT);
@@ -2537,7 +2694,7 @@ bool Unit_Damage(Unit *unit, uint16 damage, uint16 range)
 	}
 
 	if (range != 0) {
-		Map_MakeExplosion((damage < 25) ? EXPLOSION_IMPACT_SMALL : EXPLOSION_IMPACT_MEDIUM, unit->o.position, 0, 0);
+		Map_MakeExplosion((damage < 25) ? EXPLOSION_HIT_SMALL : EXPLOSION_HIT_MEDIUM, unit->o.position, 0, 0);
 	}
 
 	if (!House_IsHuman(houseID)
@@ -2723,7 +2880,8 @@ void Unit_Select(Unit *unit)
 		ui = &g_table_unitInfo[unit->o.type];
 
 		/* Plays the 'reporting' sound file. */
-		if (unit->o.type != UNIT_SANDWORM) {
+		if (unit->o.type != UNIT_SANDWORM
+				&& !Audio_PlayRadioVoice(unit->o.index, RADIO_SELECT)) {
 			const enum SampleID sampleID
 				= (ui->movementType == MOVEMENT_FOOT)
 				? SAMPLE_YES_SIR : SAMPLE_REPORTING;
