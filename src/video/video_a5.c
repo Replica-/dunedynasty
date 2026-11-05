@@ -178,6 +178,35 @@ static ALLEGRO_MOUSE_CURSOR *s_cursor[CURSOR_MAX];
 static ALLEGRO_BITMAP *s_minimap;
 static int s_minimap_colour[MAP_SIZE_MAX * MAP_SIZE_MAX];
 
+/* OpenGL post-processing (on by default): the finished frame is copied and drawn
+ * back through a GLSL fragment shader.  Disable with [graphics] gl_post_fx = false
+ * or --no-gl-post.  The shader is read from gfx/post.frag each time the game
+ * starts, so it can be edited without rebuilding.
+ */
+bool g_gl_post_fx = true;
+bool g_gl_post_fx_cli = false;
+bool g_gl_post_fx_off_cli = false;
+
+static ALLEGRO_SHADER *s_post_shader = NULL;
+static ALLEGRO_BITMAP *s_post_bitmap = NULL;
+
+static const char s_post_default_frag[] =
+	"#ifdef GL_ES\n"
+	"precision mediump float;\n"
+	"#endif\n"
+	"uniform sampler2D al_tex;\n"
+	"uniform vec2 u_resolution;\n"
+	"uniform float u_time;\n"
+	"varying vec4 varying_color;\n"
+	"varying vec2 varying_texcoord;\n"
+	"void main() {\n"
+	"	vec4 c = texture2D(al_tex, varying_texcoord) * varying_color;\n"
+	"	float scan = 0.94 + 0.06 * sin(varying_texcoord.y * u_resolution.y * 3.14159);\n"
+	"	vec2 d = varying_texcoord - 0.5;\n"
+	"	float vig = 1.0 - dot(d, d) * 0.5;\n"
+	"	gl_FragColor = vec4(c.rgb * scan * vig, c.a);\n"
+	"}\n";
+
 static bool take_screenshot = false;
 static bool show_fps = false;
 static FadeInAux s_fadeInAux;
@@ -343,6 +372,118 @@ VideoA5_AppendFlag(char *dst, int max, int *pos, const char *str)
 	}
 }
 
+static char *
+VideoA5_ReadTextFile(const char *path)
+{
+	FILE *fp = fopen(path, "rb");
+	if (fp == NULL)
+		return NULL;
+
+	fseek(fp, 0, SEEK_END);
+	const long len = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+
+	char *buf = (len > 0) ? malloc(len + 1) : NULL;
+	if (buf != NULL) {
+		const size_t n = fread(buf, 1, len, fp);
+		buf[n] = '\0';
+	}
+
+	fclose(fp);
+	return buf;
+}
+
+static void
+VideoA5_InitPostFX(void)
+{
+	char path[PATH_MAX];
+	char *frag = NULL;
+
+	snprintf(path, sizeof(path), "%s/gfx/post.frag", g_dune_data_dir);
+	frag = VideoA5_ReadTextFile(path);
+
+	s_post_shader = al_create_shader(ALLEGRO_SHADER_GLSL);
+	if (s_post_shader != NULL
+			&& al_attach_shader_source(s_post_shader, ALLEGRO_VERTEX_SHADER,
+				al_get_default_shader_source(ALLEGRO_SHADER_GLSL, ALLEGRO_VERTEX_SHADER))
+			&& al_attach_shader_source(s_post_shader, ALLEGRO_PIXEL_SHADER,
+				(frag != NULL) ? frag : s_post_default_frag)
+			&& al_build_shader(s_post_shader)) {
+		fprintf(stdout, "OpenGL post-processing: %s\n",
+				(frag != NULL) ? path : "built-in shader");
+	} else {
+		Error("OpenGL post-processing disabled, shader failed to build (%s):\n%s\n",
+				(frag != NULL) ? path : "built-in shader",
+				(s_post_shader != NULL) ? al_get_shader_log(s_post_shader) : "al_create_shader() failed");
+
+		if (s_post_shader != NULL)
+			al_destroy_shader(s_post_shader);
+
+		s_post_shader = NULL;
+		g_gl_post_fx = false;
+	}
+
+	free(frag);
+}
+
+/* Copy the finished frame, then draw it back through the shader. */
+static void
+VideoA5_PostFX(void)
+{
+	ALLEGRO_BITMAP *backbuffer = al_get_backbuffer(display);
+	const int w = al_get_bitmap_width(backbuffer);
+	const int h = al_get_bitmap_height(backbuffer);
+
+	if (s_post_bitmap != NULL
+			&& (al_get_bitmap_width(s_post_bitmap) != w || al_get_bitmap_height(s_post_bitmap) != h)) {
+		al_destroy_bitmap(s_post_bitmap);
+		s_post_bitmap = NULL;
+	}
+
+	if (s_post_bitmap == NULL) {
+		const int flags = al_get_new_bitmap_flags();
+		al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP | ALLEGRO_NO_PRESERVE_TEXTURE);
+		s_post_bitmap = al_create_bitmap(w, h);
+		al_set_new_bitmap_flags(flags);
+
+		if (s_post_bitmap == NULL)
+			return;
+	}
+
+	int cx, cy, cw, ch;
+	int old_op, old_src, old_dst;
+	ALLEGRO_TRANSFORM old_transform;
+
+	al_get_clipping_rectangle(&cx, &cy, &cw, &ch);
+	al_get_blender(&old_op, &old_src, &old_dst);
+	al_copy_transform(&old_transform, al_get_current_transform());
+
+	ALLEGRO_TRANSFORM identity;
+	al_identity_transform(&identity);
+
+	al_set_target_bitmap(s_post_bitmap);
+	al_use_transform(&identity);
+	al_set_clipping_rectangle(0, 0, w, h);
+	al_set_blender(ALLEGRO_ADD, ALLEGRO_ONE, ALLEGRO_ZERO);
+	al_draw_bitmap(backbuffer, 0, 0, 0);
+
+	al_set_target_backbuffer(display);
+	al_use_transform(&identity);
+	al_set_clipping_rectangle(0, 0, w, h);
+
+	const float resolution[2] = { (float)w, (float)h };
+
+	al_use_shader(s_post_shader);
+	al_set_shader_float_vector("u_resolution", 2, resolution, 1);
+	al_set_shader_float("u_time", (float)al_get_time());
+	al_draw_bitmap(s_post_bitmap, 0, 0, 0);
+	al_use_shader(NULL);
+
+	al_set_blender(old_op, old_src, old_dst);
+	al_set_clipping_rectangle(cx, cy, cw, ch);
+	al_use_transform(&old_transform);
+}
+
 bool
 VideoA5_Init(void)
 {
@@ -372,6 +513,19 @@ VideoA5_Init(void)
 			break;
 #endif
 	}
+
+	/* Shaders need the programmable pipeline, which is only requested when
+	 * the post-processing is on so the default rendering is unchanged.
+	 */
+	if (g_gl_post_fx_off_cli)
+		g_gl_post_fx = false;
+	else if (g_gl_post_fx_cli)
+		g_gl_post_fx = true;
+
+	if (g_gl_post_fx && g_graphics_driver == GRAPHICS_DRIVER_OPENGL)
+		APPEND_FLAG(ALLEGRO_PROGRAMMABLE_PIPELINE);
+	else
+		g_gl_post_fx = false;
 
 	if (g_gameConfig.windowMode == WM_FULLSCREEN) {
 		APPEND_FLAG(ALLEGRO_FULLSCREEN);
@@ -424,6 +578,9 @@ VideoA5_Init(void)
 	al_init_image_addon();
 	al_init_primitives_addon();
 
+	if (g_gl_post_fx)
+		VideoA5_InitPostFX();
+
 	/* Flip display in case generating the sprites takes a while. */
 	al_flip_display();
 
@@ -474,6 +631,14 @@ VideoA5_Uninit(void)
 	}
 
 	VideoA5_UninitCPSStore();
+
+	al_destroy_bitmap(s_post_bitmap);
+	s_post_bitmap = NULL;
+
+	if (s_post_shader != NULL) {
+		al_destroy_shader(s_post_shader);
+		s_post_shader = NULL;
+	}
 
 	al_destroy_bitmap(scratch);
 	scratch = NULL;
@@ -681,6 +846,9 @@ VideoA5_Tick(void)
 
 		A5_UseTransform(div);
 	}
+
+	if (s_post_shader != NULL)
+		VideoA5_PostFX();
 
 	al_flip_display();
 	al_clear_to_color(paltoRGB[0]);

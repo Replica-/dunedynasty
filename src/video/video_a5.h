@@ -17,6 +17,9 @@ typedef struct DisplayMode {
 #define DISPLAY_MODE_INITIALIZER { .width = 0, .height = 0 }
 
 extern enum GraphicsDriver g_graphics_driver;
+extern bool g_gl_post_fx;     /* [graphics] gl_post_fx (default on): GLSL post-processing of the final frame. */
+extern bool g_gl_post_fx_cli; /* From --gl-post. */
+extern bool g_gl_post_fx_off_cli; /* From --no-gl-post. */
 
 extern bool VideoA5_Init(void);
 extern void VideoA5_Uninit(void);

@@ -73,6 +73,7 @@ extern int _al_mangled_main(int argc, char **argv);
 #include "tools/random_xorshift.h"
 #include "unit.h"
 #include "video/video.h"
+#include "video/video_a5.h"
 
 
 uint32 g_hintsShown1 = 0;          /*!< A bit-array to indicate which hints has been show already (0-31). */
@@ -663,6 +664,12 @@ int main(int argc, char **argv)
 			Unit_Debug_SetWormRespawnSeconds(10);
 		}
 
+		if (strcmp(argv[i], "--no-gl-post") == 0)
+			g_gl_post_fx_off_cli = true;
+
+		if (strcmp(argv[i], "--gl-post") == 0)
+			g_gl_post_fx_cli = true;
+
 		if (strcmp(argv[i], "--test-panel") == 0)
 			g_debugTestPanel = true;
 
@@ -677,6 +684,15 @@ int main(int argc, char **argv)
 
 		if (strcmp(argv[i], "--test-options-previous") == 0)
 			g_debugTestColourMenu = 4;
+
+		if (strcmp(argv[i], "--test-options-continue") == 0)
+			g_debugTestColourMenu = 5;
+
+		if (strcmp(argv[i], "--test-colour-unit") == 0)
+			g_debugTestColourMenu = 6;
+
+		if (strcmp(argv[i], "--test-colour-mouse") == 0)
+			g_debugTestColourMenu = 7;
 	}
 
 	for (int i = 1; i + 1 < argc; i++) {

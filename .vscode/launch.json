@@ -133,6 +133,27 @@
         { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
       ],
       "presentation": { "group": "4 Missions", "order": 2 }
+    },
+
+    // ─────────────────  ✨ OpenGL post-processing shader  ─────────────────
+    // Edits to dist/gfx/post.frag (GLSL) apply on the next launch.
+
+    {
+      "name": "✨ Debug: OpenGL shader (--gl-post)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--gl-post"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "5 OpenGL", "order": 1 }
     }
   ]
 }
