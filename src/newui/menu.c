@@ -511,7 +511,7 @@ MainMenu_Draw(Widget *widget)
 	GUI_Widget_DrawBorder(WINDOWID_MAINMENU_FRAME, 2, 1);
 	GUI_Widget_DrawAll(widget);
 
-	GUI_DrawText_Wrapper("Replica 1.0",
+	GUI_DrawText_Wrapper(VideoA5_HardwareEffectsAvailable() ? "Replica 1.0 [OpenGL]" : "Replica 1.0",
 			SCREEN_WIDTH, SCREEN_HEIGHT - 9, 133, 0, 0x221);
 }
 

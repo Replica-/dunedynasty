@@ -120,6 +120,12 @@ Prim_FillRect_RGBA(float x1, float y1, float x2, float y2,
 	al_draw_filled_rectangle(x1, y1, x2, y2, al_map_rgba(r, g, b, alpha));
 }
 
+void
+Prim_SetAdditive(bool additive)
+{
+	al_set_blender(ALLEGRO_ADD, ALLEGRO_ALPHA, additive ? ALLEGRO_ONE : ALLEGRO_INVERSE_ALPHA);
+}
+
 /*--------------------------------------------------------------*/
 
 #if 0

@@ -183,6 +183,20 @@ static int s_minimap_colour[MAP_SIZE_MAX * MAP_SIZE_MAX];
  * or --no-gl-post.  The shader is read from gfx/post.frag each time the game
  * starts, so it can be edited without rebuilding.
  */
+bool g_hardware_effects = true;
+
+bool
+VideoA5_HardwareEffectsAvailable(void)
+{
+	return g_graphics_driver == GRAPHICS_DRIVER_OPENGL;
+}
+
+bool
+VideoA5_HardwareEffectsActive(void)
+{
+	return g_hardware_effects && VideoA5_HardwareEffectsAvailable();
+}
+
 bool g_gl_post_fx = true;
 bool g_gl_post_fx_cli = false;
 bool g_gl_post_fx_off_cli = false;

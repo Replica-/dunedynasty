@@ -23,6 +23,9 @@ extern void Prim_FillRect(float x1, float y1, float x2, float y2, uint8 c);
 extern void Prim_FillRect_i(int x1, int y1, int x2, int y2, uint8 c);
 extern void Prim_FillRect_RGBA(float x1, float y1, float x2, float y2, unsigned char r, unsigned char g, unsigned char b, unsigned char alpha);
 
+/* Additive blending (glowing fire) for the following primitives, or back to normal alpha blending. */
+extern void Prim_SetAdditive(bool additive);
+
 extern void Prim_DrawBorder(float x, float y, float w, float h, int thickness, bool outline, bool fill, int colour_scheme);
 
 #endif

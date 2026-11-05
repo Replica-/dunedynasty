@@ -1,6 +1,7 @@
 /** @file src/explosion.c Explosion routines. */
 
 #include <assert.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,7 +26,9 @@
 #include "tile.h"
 #include "timer/timer.h"
 #include "unit.h"
+#include "video/prim.h"
 #include "video/video_a5.h"
+#include "gui/widget.h"
 #include "tools/coord.h"
 #include "tools/encoded_index.h"
 #include "tools/random_general.h"
@@ -655,9 +658,571 @@ void Explosion_Tick(void)
 	}
 }
 
+/*--------------------------------------------------------------*/
+
+/* Hardware effects (OpenGL only).  The explosion and smoke sprites are
+ * replaced by procedural effects, built from the same chunky square pixels as
+ * the sprites: a flash, a fireball of glowing particles, sparks, and smoke that
+ * lingers after the fire.
+ *
+ * Clients only receive the sprite, position and house of an explosion, so the
+ * effects run on a clock of their own.  An effect starts when a sprite of its
+ * kind is first seen on a tile, and runs for its own duration, longer than the
+ * original sprite animation.
+ */
+
+enum FxKind {
+	FX_NONE,
+	FX_SPARK,       /* Bullet impacts. */
+	FX_BLAST_S,
+	FX_BLAST_M,
+	FX_BLAST_L,
+	FX_DUST,        /* Sand burst, spice bloom tremor. */
+	FX_GAS,         /* Deviator gas, coloured by house. */
+	FX_WORM,        /* Sandworm swallow. */
+	FX_FLAME,       /* Burning wreck, loops while the explosion lasts. */
+	FX_SMOKE,       /* Smoke plume, loops while the explosion lasts. */
+	FX_PRE,         /* Fireball while the explosion still waits for its first sprite. */
+	FX_MAX
+};
+
+static const struct {
+	int duration;   /* In ticks.  For a loop, the time to fade out after the explosion ends. */
+	bool loop;
+} s_fx_info[FX_MAX] = {
+	[FX_SPARK]   = { 16, false },
+	[FX_BLAST_S] = { 34, false },
+	[FX_BLAST_M] = { 50, false },
+	[FX_BLAST_L] = { 70, false },
+	[FX_DUST]    = { 44, false },
+	[FX_GAS]     = { 90, false },
+	[FX_WORM]    = { 110, false },
+	[FX_FLAME]   = { 24, true },
+	[FX_SMOKE]   = { 40, true },
+	[FX_PRE]     = { 40, false },
+};
+
+#define FX_MAX_INSTANCES 96
+#define FX_WAIT_TICKS 6         /* An explosion without a sprite this long is waiting. */
+#define FX_RESTART_GAP 8       /* Not seen for this many ticks: a new explosion. */
+#define FX_TWO_PI 6.2831853f
+
+typedef struct FxInstance {
+	bool used;
+	uint8 kind;
+	uint8 houseID;
+	uint16 packed;
+	tile32 position;
+	int64_t start;
+	int64_t lastSeen;
+	uint32 seed;
+} FxInstance;
+
+static FxInstance s_fx[FX_MAX_INSTANCES];
+
+static enum FxKind
+Fx_Classify(int spriteID)
+{
+	switch (spriteID) {
+		case 153: case 154: return FX_SPARK;
+		case 183: case 184: return FX_BLAST_S;
+		case 151: case 152:
+		case 198: case 199: case 200: case 201: case 202:
+		case 203: case 204: case 205: case 206: case 207: return FX_BLAST_M;
+		case 188: case 189: case 190: case 191: case 192: return FX_BLAST_L;
+		case 156: case 157: case 158: return FX_DUST;
+		case 208: case 209: case 210: case 211: case 212: return FX_GAS;
+		case 168: case 169: case 170: return FX_FLAME;
+		case 180: case 181: case 182: return FX_SMOKE;
+		default: break;
+	}
+
+	if (spriteID >= 213 && spriteID <= 222)
+		return FX_WORM;
+
+	return FX_NONE;
+}
+
+static uint32
+Fx_Hash(uint32 a, uint32 b)
+{
+	uint32 h = a * 0x9E3779B1u ^ (b + 0x7F4A7C15u) * 0x85EBCA6Bu;
+
+	h ^= h >> 15; h *= 0x2C1B3C6Du;
+	h ^= h >> 12; h *= 0x297A2D39u;
+	h ^= h >> 15;
+	return h;
+}
+
+/* A stable random number in [0, 1] for particle i. */
+static float
+Fx_Rand(uint32 seed, uint32 i, uint32 k)
+{
+	return (Fx_Hash(seed + k * 0x1000193u, i) & 0xFFFF) / 65535.0f;
+}
+
+static float
+Fx_Clamp01(float v)
+{
+	return (v < 0.0f) ? 0.0f : (v > 1.0f) ? 1.0f : v;
+}
+
+/* A chunky pixel of the given size, centred on x,y around the explosion. */
+static void
+Fx_Pixel(int bx, int by, float x, float y, int size, const unsigned char *c, float alpha)
+{
+	const int a = (int)(255.0f * Fx_Clamp01(alpha));
+	const int px = bx + (int)floorf(x) - size / 2;
+	const int py = by + (int)floorf(y) - size / 2;
+
+	if (a <= 0)
+		return;
+
+	if (size < 3) {
+		Prim_FillRect_RGBA(px, py, px + size, py + size, c[0], c[1], c[2], a);
+		return;
+	}
+
+	/* A disc, one row at a time so that the pixels do not overlap and
+	 * blend twice.  Still whole pixels, so it stays pixel art.
+	 */
+	const float r = size * 0.5f;
+
+	for (int row = 0; row < size; row++) {
+		const float dy = row + 0.5f - r;
+		const float half = sqrtf(r * r - dy * dy);
+		const int inset = (int)floorf(r - half + 0.5f);
+
+		if (inset * 2 >= size)
+			continue;
+
+		Prim_FillRect_RGBA(px + inset, py + row, px + size - inset, py + row + 1, c[0], c[1], c[2], a);
+	}
+}
+
+/* Fire palette in a few hard steps, like the original 256 colour sprites. */
+static const unsigned char *
+Fx_FireColour(float heat)
+{
+	static const unsigned char white[] = { 255, 246, 190 };
+	static const unsigned char yellow[] = { 255, 200, 70 };
+	static const unsigned char orange[] = { 244, 120, 24 };
+	static const unsigned char red[] = { 190, 52, 16 };
+	static const unsigned char ember[] = { 110, 40, 24 };
+
+	if (heat > 0.80f) return white;
+	if (heat > 0.58f) return yellow;
+	if (heat > 0.36f) return orange;
+	if (heat > 0.16f) return red;
+	return ember;
+}
+
+static const unsigned char *
+Fx_SmokeColour(float shade)
+{
+	static const unsigned char dark[] = { 44, 40, 38 };
+	static const unsigned char mid[] = { 78, 72, 68 };
+	static const unsigned char light[] = { 124, 116, 108 };
+	static const unsigned char pale[] = { 164, 156, 146 };
+
+	if (shade > 0.75f) return pale;
+	if (shade > 0.50f) return light;
+	if (shade > 0.25f) return mid;
+	return dark;
+}
+
+/* A fireball: flash, shock ring, glowing particles that cool into smoke, and sparks.
+ * t goes from 0 to 1, radius is in pixels.
+ */
+static void
+Fx_DrawBlast(int bx, int by, float t, float radius, uint32 seed, int num)
+{
+	static const unsigned char flash[] = { 255, 250, 210 };
+	static const unsigned char ring[] = { 255, 220, 150 };
+	static const unsigned char spark[] = { 255, 232, 150 };
+
+	/* Smoke under the fire. */
+	for (int i = 0; i < num / 2; i++) {
+		const float st = Fx_Clamp01((t - 0.25f - 0.2f * Fx_Rand(seed, i, 10)) / 0.75f);
+		const float angle = FX_TWO_PI * Fx_Rand(seed, i, 11);
+		const float spread = radius * (0.2f + 0.6f * Fx_Rand(seed, i, 12));
+
+		if (st <= 0.0f)
+			continue;
+
+		Fx_Pixel(bx, by,
+				cosf(angle) * spread * (0.6f + 0.4f * st),
+				sinf(angle) * spread * 0.6f - st * radius * 1.3f,
+				2 + (int)(st * radius * 0.28f),
+				Fx_SmokeColour(0.15f + 0.8f * st * Fx_Rand(seed, i, 13)),
+				0.65f * (1.0f - st) * Fx_Clamp01(st * 8.0f));
+	}
+
+	Prim_SetAdditive(true);
+
+	/* The fire. */
+	for (int i = 0; i < num; i++) {
+		const float delay = 0.12f * Fx_Rand(seed, i, 1);
+		const float pt = Fx_Clamp01((t - delay) / 0.6f);
+		const float angle = FX_TWO_PI * Fx_Rand(seed, i, 2);
+		const float speed = 0.3f + 0.7f * Fx_Rand(seed, i, 3);
+		const float heat = 1.0f - pt * 1.1f - 0.1f * Fx_Rand(seed, i, 4);
+		const float r = radius * speed * (1.0f - (1.0f - pt) * (1.0f - pt));
+
+		if (t <= delay || heat <= 0.12f)
+			continue;
+
+		Fx_Pixel(bx, by,
+				cosf(angle) * r,
+				sinf(angle) * r * 0.75f - pt * radius * 0.5f,
+				1 + (int)((1.0f - pt) * radius * 0.24f),
+				Fx_FireColour(heat),
+				1.0f - pt * pt);
+	}
+
+	/* Sparks, thrown further than the fire and falling back. */
+	for (int i = 0; i < num / 3; i++) {
+		const float pt = Fx_Clamp01(t / 0.55f);
+		const float angle = FX_TWO_PI * Fx_Rand(seed, i, 20);
+		const float speed = 0.8f + 1.0f * Fx_Rand(seed, i, 21);
+
+		if (t >= 0.55f)
+			break;
+
+		Fx_Pixel(bx, by,
+				cosf(angle) * radius * speed * pt,
+				sinf(angle) * radius * speed * pt * 0.7f + radius * 0.9f * pt * pt - radius * 0.3f * pt,
+				1, spark, 1.0f - pt);
+	}
+
+	/* Flash and shock ring. */
+	if (t < 0.22f) {
+		const float f = t / 0.22f;
+		const int s = (int)(radius * 0.8f * (1.0f - f)) + 1;
+		const float a = 0.9f * (1.0f - f);
+
+		Fx_Pixel(bx, by, 0, 0, 2 * s, flash, a);
+		Fx_Pixel(bx, by, 0, 0, 2 * s + 4, flash, a * 0.4f);
+		Fx_Pixel(bx, by, 0, 0, 1 + (int)(radius * 1.2f * f), flash, a * 0.5f);
+	}
+
+	if (radius >= 8.0f && t < 0.35f) {
+		const float f = t / 0.35f;
+
+		for (int i = 0; i < 20; i++) {
+			const float angle = FX_TWO_PI * i / 20.0f;
+
+			Fx_Pixel(bx, by,
+					cosf(angle) * radius * 1.5f * f,
+					sinf(angle) * radius * 1.5f * f * 0.75f,
+					1, ring, 0.6f * (1.0f - f));
+		}
+	}
+
+	Prim_SetAdditive(false);
+}
+
+/* A burning wreck.  Flames lick upwards and turn into smoke. */
+static void
+Fx_DrawFlame(int bx, int by, int64_t now, float env, uint32 seed)
+{
+	const int num = 16;
+
+	/* Smoke first, so the flames sit on top of it. */
+	for (int i = 0; i < num; i++) {
+		const float phase = fmodf(now / 110.0f + (float)i / num + Fx_Rand(seed, i, 1) * 0.1f, 1.0f);
+		const float wobble = sinf(phase * 7.0f + i);
+
+		if (phase < 0.45f)
+			continue;
+
+		Fx_Pixel(bx, by, wobble * 3.0f * phase + phase * 3.0f, 2.0f - phase * 26.0f,
+				2 + (int)(phase * 3.0f),
+				Fx_SmokeColour(0.1f + 0.5f * phase), 0.6f * env * (1.0f - phase));
+	}
+
+	Prim_SetAdditive(true);
+
+	for (int i = 0; i < num; i++) {
+		const float phase = fmodf(now / 38.0f + (float)i / num + Fx_Rand(seed, i, 2) * 0.1f, 1.0f);
+		const float heat = 1.0f - phase * 1.15f;
+
+		if (heat <= 0.12f)
+			continue;
+
+		Fx_Pixel(bx, by,
+				(Fx_Rand(seed, i, 3) - 0.5f) * 7.0f * (1.0f - phase) + sinf(phase * 9.0f + i) * 1.4f,
+				3.0f - phase * 14.0f,
+				3 - (int)(phase * 2.2f),
+				Fx_FireColour(heat), env * (1.0f - phase * 0.6f));
+	}
+
+	Prim_SetAdditive(false);
+}
+
+/* A small fire where a smoke plume starts. */
+static void
+Fx_DrawFlameBase(int bx, int by, int64_t now, float env, uint32 seed)
+{
+	Prim_SetAdditive(true);
+
+	for (int i = 0; i < 10; i++) {
+		const float phase = fmodf(now / 30.0f + (float)i / 10 + Fx_Rand(seed, i, 5) * 0.1f, 1.0f);
+		const float heat = 1.0f - phase * 1.2f;
+
+		if (heat <= 0.12f)
+			continue;
+
+		Fx_Pixel(bx, by,
+				(Fx_Rand(seed, i, 6) - 0.5f) * 6.0f * (1.0f - phase * 0.7f),
+				4.0f - phase * 8.0f,
+				2 - (int)(phase * 1.5f),
+				Fx_FireColour(heat), env * (1.0f - phase * 0.5f));
+	}
+
+	Prim_SetAdditive(false);
+}
+
+/* A smoke plume, rising and spreading in the wind, from a small fire. */
+static void
+Fx_DrawSmoke(int bx, int by, int64_t now, float env, uint32 seed)
+{
+	const int num = 18;
+
+	for (int i = 0; i < num; i++) {
+		const float phase = fmodf(now / 150.0f + (float)i / num + Fx_Rand(seed, i, 1) * 0.08f, 1.0f);
+		const float wobble = sinf(phase * 5.0f + i * 1.7f);
+
+		Fx_Pixel(bx, by,
+				wobble * (1.0f + phase * 4.0f) + phase * phase * 9.0f,
+				4.0f - phase * 36.0f,
+				2 + (int)(phase * 5.0f),
+				Fx_SmokeColour(0.2f + 0.8f * phase),
+				0.7f * env * (1.0f - phase) * Fx_Clamp01(phase * 6.0f));
+	}
+
+	Fx_DrawFlameBase(bx, by, now, env, seed);
+}
+
+/* Billows of tinted gas that grow and drift. */
+static void
+Fx_DrawGas(int bx, int by, float t, uint8 houseID, uint32 seed)
+{
+	static const unsigned char tint[][3] = {
+		{ 214, 70, 58 },    /* Harkonnen. */
+		{ 70, 118, 226 },   /* Atreides. */
+		{ 80, 206, 100 },   /* Ordos. */
+		{ 214, 200, 70 },   /* Others. */
+	};
+	const unsigned char *base = tint[(houseID < 3) ? houseID : 3];
+	const float env = Fx_Clamp01(t * 8.0f) * Fx_Clamp01((1.0f - t) * 3.0f);
+
+	for (int i = 0; i < 24; i++) {
+		const float angle = FX_TWO_PI * Fx_Rand(seed, i, 1);
+		const float dist = (3.0f + 9.0f * Fx_Rand(seed, i, 2)) * (0.4f + 0.6f * Fx_Clamp01(t * 3.0f));
+		const float shade = 0.65f + 0.35f * Fx_Rand(seed, i, 3);
+		const unsigned char colour[3] = {
+			(unsigned char)(base[0] * shade), (unsigned char)(base[1] * shade), (unsigned char)(base[2] * shade)
+		};
+
+		Fx_Pixel(bx, by,
+				cosf(angle + t * 1.5f) * dist,
+				sinf(angle + t * 1.5f) * dist * 0.7f - t * 5.0f,
+				3 + (int)(Fx_Rand(seed, i, 4) * 3.0f + t * 3.0f),
+				colour, 0.45f * env);
+	}
+}
+
+/* Sand thrown up: a ring of dust that rises and settles. */
+static void
+Fx_DrawDust(int bx, int by, float t, float radius, int num, uint32 seed)
+{
+	static const unsigned char sand[] = { 206, 164, 96 };
+	static const unsigned char pale[] = { 232, 200, 138 };
+
+	for (int i = 0; i < num; i++) {
+		const float pt = Fx_Clamp01((t - 0.1f * Fx_Rand(seed, i, 1)) / 0.9f);
+		const float angle = FX_TWO_PI * Fx_Rand(seed, i, 2);
+		const float r = radius * (0.3f + 0.7f * Fx_Rand(seed, i, 3)) * (1.0f - (1.0f - pt) * (1.0f - pt));
+
+		Fx_Pixel(bx, by,
+				cosf(angle) * r,
+				sinf(angle) * r * 0.6f - sinf(pt * 3.1416f) * radius * 0.5f,
+				2 + (int)((0.4f + pt) * 2.0f),
+				(Fx_Rand(seed, i, 4) > 0.5f) ? sand : pale,
+				0.75f * (1.0f - pt) * Fx_Clamp01(pt * 10.0f + 0.3f));
+	}
+}
+
+static void
+Fx_Draw(const FxInstance *fx, int64_t now)
+{
+	int x, y;
+
+	if (!Map_IsUnveiledToHouse(g_playerHouseID, fx->packed))
+		return;
+
+	if (!Map_IsPositionInViewport(fx->position, &x, &y))
+		return;
+
+	x += g_widgetProperties[WINDOWID_VIEWPORT].xBase;
+	y += g_widgetProperties[WINDOWID_VIEWPORT].yBase;
+
+	const int duration = s_fx_info[fx->kind].duration;
+	const int64_t age = now - fx->start;
+	if (age < 0)
+		return;
+
+	const float t = Fx_Clamp01((float)age / duration);
+
+	switch (fx->kind) {
+		case FX_SPARK:   Fx_DrawBlast(x, y, t, 4.0f, fx->seed, 7); break;
+		case FX_BLAST_S: Fx_DrawBlast(x, y, t, 7.0f, fx->seed, 16); break;
+		case FX_BLAST_M: Fx_DrawBlast(x, y, t, 11.0f, fx->seed, 28); break;
+		case FX_PRE:     Fx_DrawBlast(x, y, t, 9.0f, fx->seed, 22); break;
+		case FX_BLAST_L: Fx_DrawBlast(x, y, t, 17.0f, fx->seed, 44); break;
+		case FX_DUST:    Fx_DrawDust(x, y, t, 12.0f, 16, fx->seed); break;
+		case FX_WORM:    Fx_DrawDust(x, y, t, 18.0f, 30, fx->seed); break;
+		case FX_GAS:     Fx_DrawGas(x, y, t, fx->houseID, fx->seed); break;
+
+		case FX_FLAME:
+		case FX_SMOKE: {
+			/* Fade in when it starts, and out after the explosion has ended. */
+			const float fadeOut = Fx_Clamp01(1.0f - (float)(now - fx->lastSeen) / duration);
+			const float env = Fx_Clamp01(age / 12.0f) * fadeOut;
+
+			if (fx->kind == FX_FLAME)
+				Fx_DrawFlame(x, y, now, env, fx->seed);
+			else
+				Fx_DrawSmoke(x, y, now, env, fx->seed);
+			break;
+		}
+
+		default: break;
+	}
+}
+
+/* Note an explosion drawn this frame, starting its effect if it is new. */
+static void
+Fx_Track(const Explosion *e, enum FxKind kind, int64_t now, int delay)
+{
+	const uint16 packed = Tile_PackTile(e->position);
+	FxInstance *fx = NULL;
+	FxInstance *freeSlot = NULL;
+
+	for (int i = 0; i < FX_MAX_INSTANCES; i++) {
+		if (!s_fx[i].used) {
+			if (freeSlot == NULL)
+				freeSlot = &s_fx[i];
+		} else if (s_fx[i].packed == packed && s_fx[i].kind == kind) {
+			fx = &s_fx[i];
+			break;
+		}
+	}
+
+	if (fx == NULL) {
+		fx = freeSlot;
+		if (fx == NULL)
+			return;
+
+		fx->start = now + delay;
+		fx->used = true;
+	} else if (now - fx->lastSeen > FX_RESTART_GAP) {
+		fx->start = now + delay;
+	} else {
+		fx->lastSeen = now;
+		return;
+	}
+
+	fx->kind = kind;
+	fx->packed = packed;
+	fx->houseID = e->houseID;
+	fx->position = e->position;
+	fx->lastSeen = now;
+	fx->seed = Fx_Hash(packed, now);
+}
+
+/* The first sprite has arrived soon after the explosion started, so it was no
+ * long wait: drop the early fire that had not been drawn yet.
+ */
+static void
+Fx_CancelWaiting(uint16 packed, int64_t now)
+{
+	for (int i = 0; i < FX_MAX_INSTANCES; i++) {
+		FxInstance *fx = &s_fx[i];
+
+		if (fx->used && fx->packed == packed && fx->start > now
+				&& (fx->kind == FX_PRE || fx->kind == FX_FLAME))
+			fx->used = false;
+	}
+}
+
+static void
+Explosion_DrawHardware(void)
+{
+	const int64_t now = Timer_GetTicks();
+
+	for (int i = 1; i < s_explosions.num_elem; i++) {
+		const Explosion *e = (const Explosion *)BinHeap_GetElem(&s_explosions, i);
+
+		const uint16 packed = Tile_PackTile(e->position);
+		if (!Map_IsUnveiledToHouse(g_playerHouseID, packed))
+			continue;
+
+		int x, y;
+		if (!Map_IsPositionInViewport(e->position, &x, &y))
+			continue;
+
+		/* Waiting for the first sprite, as the structure explosions do for
+		 * up to a second.  Start burning at once, rather than after the
+		 * building is gone.
+		 */
+		if (e->spriteID == 0) {
+			/* Not for the first few ticks, as every explosion starts like this. */
+			Fx_Track(e, FX_PRE, now, FX_WAIT_TICKS);
+			Fx_Track(e, FX_FLAME, now, FX_WAIT_TICKS);
+			continue;
+		}
+
+		Fx_CancelWaiting(packed, now);
+
+		const enum FxKind kind = Fx_Classify(e->spriteID);
+		if (kind == FX_NONE) {
+			Shape_DrawRemap(e->spriteID, e->houseID, x, y, 2, 0xC000);
+			continue;
+		}
+
+		Fx_Track(e, kind, now, 0);
+	}
+
+	/* Draw the effects, including those whose explosion has already ended. */
+	for (int i = 0; i < FX_MAX_INSTANCES; i++) {
+		FxInstance *fx = &s_fx[i];
+
+		if (!fx->used)
+			continue;
+
+		const int duration = s_fx_info[fx->kind].duration;
+		const bool alive = s_fx_info[fx->kind].loop
+				? (now - fx->lastSeen <= duration)
+				: (now - fx->start <= duration);
+
+		if (alive) {
+			Fx_Draw(fx, now);
+		} else if (now - fx->lastSeen > FX_RESTART_GAP) {
+			fx->used = false;
+		}
+	}
+}
+
 void
 Explosion_Draw(void)
 {
+	if (VideoA5_HardwareEffectsActive()) {
+		Explosion_DrawHardware();
+		return;
+	}
+
 	for (int i = 1; i < s_explosions.num_elem; i++) {
 		const Explosion *e = (const Explosion *)BinHeap_GetElem(&s_explosions, i);
 

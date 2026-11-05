@@ -144,6 +144,7 @@ static const GameOption s_game_option[] = {
 	{ "graphics",   "viewport_scale",   CONFIG_FLOAT_1_8,       .d._float = &g_screenDiv[SCREENDIV_VIEWPORT].scalex },
 	{ "graphics",   "hardware_cursor",  CONFIG_BOOL,            .d._bool = &g_gameConfig.hardwareCursor },
 	{ "graphics",   "gl_post_fx",       CONFIG_BOOL,            .d._bool = &g_gl_post_fx },
+	{ "graphics",   "hardware_effects", CONFIG_BOOL,            .d._bool = &g_hardware_effects },
 
 	{ "controls",   "auto_scroll",              CONFIG_BOOL,    .d._bool = &g_gameConfig.autoScroll },
 	{ "controls",   "scroll_speed",             CONFIG_INT_1_16,.d._int = &g_gameConfig.scrollSpeed },

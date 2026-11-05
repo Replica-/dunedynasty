@@ -602,7 +602,7 @@ MenuBar_ClickRadioButton(Widget *radio)
 		  -1
 		},
 		{ 26, 90, 91, 92, 93, 94,
-		  45, 55, 115, 46, 56, 116, 47, 57, 117,
+		  45, 55, 115, 46, 56, 116, 47, 57, 117, 48, 58,
 		  -1
 		},
 		{ 26, 90, 91, 92, 93, 94,
@@ -746,12 +746,20 @@ MenuBar_ClickViewportScaleSlider(Widget *w)
 static const int s_house_colour_presets[] = {
 	0xE02020, 0xF08000, 0xF0D020, 0x30B040,
 	0x20C0D0, 0x3060F0, 0xA040E0, 0xE0E0E0,
+
+	/* Second row: darker and different shades. */
+	0x801818, 0x8A5A2B, 0x808020, 0x146040,
+	0x108080, 0x182880, 0xF050A0, 0x606060,
 };
 
 #define HOUSE_COLOUR_NUM_PRESETS ((int)lengthof(s_house_colour_presets))
+#define HOUSE_COLOUR_PRESETS_PER_ROW 8
 #define HOUSE_COLOUR_PREVIEW_W 20
 #define HOUSE_COLOUR_PRESET_W 8
+#define HOUSE_COLOUR_PRESET_H 6
 #define HOUSE_COLOUR_PRESET_GAP 1
+#define HOUSE_COLOUR_ROW_GAP 2
+#define HOUSE_COLOUR_PICKER_H 14 /* Two rows of presets. */
 
 /* Apply a custom house colour, and move the sliders to match. */
 static void
@@ -798,20 +806,23 @@ MenuBar_DrawHouseColourPicker(Widget *w)
 	const int y = wi->yBase + w->offsetY;
 	const int current = Video_GetCustomHouseColour();
 
-	Prim_FillRect_RGBA(x - 1, y - 1, x + HOUSE_COLOUR_PREVIEW_W + 1, y + w->height + 1, 0, 0, 0, 0xFF);
-	Prim_FillRect_RGBA(x, y, x + HOUSE_COLOUR_PREVIEW_W, y + w->height,
+	Prim_FillRect_RGBA(x - 1, y - 1, x + HOUSE_COLOUR_PREVIEW_W + 1, y + HOUSE_COLOUR_PICKER_H + 1, 0, 0, 0, 0xFF);
+	Prim_FillRect_RGBA(x, y, x + HOUSE_COLOUR_PREVIEW_W, y + HOUSE_COLOUR_PICKER_H,
 			(current >> 16) & 0xFF, (current >> 8) & 0xFF, current & 0xFF, 0xFF);
 
 	for (int i = 0; i < HOUSE_COLOUR_NUM_PRESETS; i++) {
 		const int rgb = s_house_colour_presets[i];
-		const int x1 = x + HOUSE_COLOUR_PREVIEW_W + 6 + i * (HOUSE_COLOUR_PRESET_W + HOUSE_COLOUR_PRESET_GAP);
+		const int x1 = x + HOUSE_COLOUR_PREVIEW_W + 6
+				+ (i % HOUSE_COLOUR_PRESETS_PER_ROW) * (HOUSE_COLOUR_PRESET_W + HOUSE_COLOUR_PRESET_GAP);
+		const int y1 = y + (i / HOUSE_COLOUR_PRESETS_PER_ROW) * (HOUSE_COLOUR_PRESET_H + HOUSE_COLOUR_ROW_GAP);
 		const int x2 = x1 + HOUSE_COLOUR_PRESET_W;
+		const int y2 = y1 + HOUSE_COLOUR_PRESET_H;
 		const bool selected = (rgb == current);
 
 		/* Outline: white if it is the current colour, black otherwise. */
 		const unsigned char outline = selected ? 0xFF : 0x00;
-		Prim_FillRect_RGBA(x1 - 1, y - 1, x2 + 1, y + w->height + 1, outline, outline, outline, 0xFF);
-		Prim_FillRect_RGBA(x1, y, x2, y + w->height,
+		Prim_FillRect_RGBA(x1 - 1, y1 - 1, x2 + 1, y2 + 1, outline, outline, outline, 0xFF);
+		Prim_FillRect_RGBA(x1, y1, x2, y2,
 				(rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, 0xFF);
 	}
 }
@@ -821,13 +832,19 @@ MenuBar_ClickHouseColourPresets(Widget *w)
 {
 	const WidgetProperties *wi = &g_widgetProperties[w->parentID];
 	const int x = wi->xBase + w->offsetX + HOUSE_COLOUR_PREVIEW_W + 6;
+	const int y = wi->yBase + w->offsetY;
 	const int step = HOUSE_COLOUR_PRESET_W + HOUSE_COLOUR_PRESET_GAP;
+	const int rowStep = HOUSE_COLOUR_PRESET_H + HOUSE_COLOUR_ROW_GAP;
 	const int dx = g_mouseX - x;
+	const int dy = g_mouseY - y;
 
-	if (dx >= 0) {
-		const int i = dx / step;
+	if (dx >= 0 && dy >= 0) {
+		const int col = dx / step;
+		const int i = (dy / rowStep) * HOUSE_COLOUR_PRESETS_PER_ROW + col;
 
-		if (i < HOUSE_COLOUR_NUM_PRESETS && (dx % step) < HOUSE_COLOUR_PRESET_W + 1
+		if (col < HOUSE_COLOUR_PRESETS_PER_ROW && i < HOUSE_COLOUR_NUM_PRESETS
+				&& (dx % step) < HOUSE_COLOUR_PRESET_W + 1
+				&& (dy % rowStep) < HOUSE_COLOUR_PRESET_H + 1
 				&& s_house_colour_presets[i] != Video_GetCustomHouseColour())
 			MenuBar_SetHouseColour(s_house_colour_presets[i]);
 	}
@@ -857,6 +874,7 @@ MenuBar_CreateGameControls(void)
 	 * 45, 55, 115  -- menubar scale label, slider.
 	 * 46, 56, 116  -- sidebar scale label, slider.
 	 * 47, 57, 117  -- viewport scale label, slider.
+	 * 48, 58       -- hardware effects label, off/on.  Only with the OpenGL driver.
 	 *
 	 * 60, 70   -- health bars label, off/on/always on.
 	 * 61, 71   -- hi-res overlays label, off/on.
@@ -905,6 +923,7 @@ MenuBar_CreateGameControls(void)
 		{ 45, 0, "Menubar Scale" },
 		{ 46, 1, "Sidebar Scale" },
 		{ 47, 2, "Viewport Scale" },
+		{ 48, 3, "Hardware effects" },
 		{ 60, 0, "Health bars" },
 		{ 61, 1, "Hi-res overlays" },
 		{ 62, 2, "Smooth unit animation" },
@@ -913,6 +932,9 @@ MenuBar_CreateGameControls(void)
 	};
 
 	for (unsigned int i = 0; i < lengthof(label); i++) {
+		if (label[i].index == 48 && !VideoA5_HardwareEffectsAvailable())
+			continue;
+
 		const uint16 x = desc->widgets[label[i].position].offsetX + (label[i].index >= 60 ? 40 : 0);
 		const uint16 y = desc->widgets[label[i].position].offsetY;
 
@@ -936,6 +958,7 @@ MenuBar_CreateGameControls(void)
 		{ 51, 1, 104 }, /* Mouse wheel. */
 		{ 52, 2, 104 }, /* Scrolling edge. */
 		{ 53, 3,  46 }, /* Auto scroll. */
+		{ 58, 3,  64 }, /* Hardware effects. */
 		{ 70, 0,  64 }, /* Health bars. */
 		{ 71, 1,  64 }, /* Hi-res vector graphics. */
 		{ 72, 2,  64 }, /* Smooth unit animation. */
@@ -944,6 +967,9 @@ MenuBar_CreateGameControls(void)
 	};
 
 	for (unsigned int i = 0; i < lengthof(button); i++) {
+		if (button[i].index == 58 && !VideoA5_HardwareEffectsAvailable())
+			continue;
+
 		const uint16 x = desc->widgets[button[i].position].offsetX + (button[i].index >= 60 ? 40 : 0);
 		const uint16 y = desc->widgets[button[i].position].offsetY;
 
@@ -994,7 +1020,8 @@ MenuBar_CreateGameControls(void)
 		const uint16 y = 24 + 17 * slider[i].position;
 		SliderData *data;
 
-		w = Slider_Allocate(slider[i].index, g_gameControlWindowDesc.index, slider[i].x, y, width, 12);
+		w = Slider_Allocate(slider[i].index, g_gameControlWindowDesc.index, slider[i].x, y, width,
+				(slider[i].index == 133) ? HOUSE_COLOUR_PICKER_H : 12);
 		w->clickProc = slider[i].clickProc;
 
 		data = w->data;
@@ -1199,6 +1226,7 @@ MenuBar_TickGameControls(void)
 		case 0x8000 | 51: g_gameConfig.holdControlToZoom ^= 0x1; break;
 		case 0x8000 | 52: g_gameConfig.scrollAlongScreenEdge ^= 0x1; break;
 		case 0x8000 | 53: g_gameConfig.autoScroll ^= 0x1; break;
+		case 0x8000 | 58: g_hardware_effects = !g_hardware_effects; break;
 
 		case 0x8000 | 70: /* Health bars. */
 			w = GUI_Widget_Get_ByIndex(g_widgetLinkedListTail, 70);
