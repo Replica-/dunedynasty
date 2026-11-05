@@ -1327,6 +1327,12 @@ Menu_Run(void)
 		g_campaign_selected = CAMPAIGNID_DUNE_II;
 		g_playerHouseID = g_startHouse;
 		g_campaignID = g_startMission - 1;
+
+		/* Normally done when choosing "Play a game"; without it the house
+		 * alliance table is all zeroes, so every house counts as allied and
+		 * the level is "won" as soon as the 2 minute minimum has passed.
+		 */
+		Campaign_Load();
 		g_scenarioID = StrategicMap_CampaignChoiceToScenarioID(g_campaignID, g_startRegion % 3);
 
 		/* The main menu normally loads the palette (and the player's house
