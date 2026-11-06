@@ -60,6 +60,7 @@ extern bool Audio_Poll(void);
 #include "audio_a5.h"
 
 extern bool Audio_PlayRadioVoice(int voiceSeed, enum RadioKind kind);
+extern void Audio_PlayThump(float volume, float pan);
 extern void Audio_SetSandstormWind(float volume);
 
 #define Audio_PollMusic         AudioA5_PollMusic

@@ -81,6 +81,12 @@ typedef struct Explosion {
 extern void Explosion_Init(void);
 extern void Explosion_Uninit(void);
 extern void Explosion_Start(uint16 explosionType, tile32 position, uint8 houseID);
+extern bool g_debugTestFire;    /* From --test-fire: fires and smoke, a screenshot, then quit. */
+
+/* A fire with its smoke at x,y in the viewport (hardware effects only).  smoke and
+ * flames, 0 to 1, are how much of each: the smoke can outlast the flames.
+ */
+extern void Explosion_DrawFire(int x, int y, float smoke, float flames, uint32 seed);
 extern void Explosion_Tick(void);
 extern void Explosion_Draw(void);
 

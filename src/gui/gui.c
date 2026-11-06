@@ -277,6 +277,31 @@ GUI_DrawStatusBarTextWrapper(uint8 priority,
 	const char *arg2 = NULL;
 	const char *arg3 = NULL;
 
+	/* Replica: the same alert not over and over.  The "insufficient" ones (funds,
+	 * power, spice storage) come every few seconds for as long as it lasts: once
+	 * in a while is enough.  Any other message is not repeated for a few seconds.
+	 */
+	{
+		static struct { uint16 s1, s2, s3; int64_t at; } recent[16];
+		static int next = 0;
+		const bool nag = (str1 == STR_INSUFFICIENT_FUNDS_CONSTRUCTION_IS_HALTED
+				|| str1 == STR_INSUFFICIENT_POWER_WINDTRAP_IS_NEEDED
+				|| str1 == STR_INSUFFICIENT_SPICE_STORAGE_AVAILABLE_SPICE_IS_LOST);
+		const int64_t quiet = (nag ? 45 : 10) * 60;
+
+		for (int i = 0; i < 16; i++) {
+			if (recent[i].s1 == str1 && recent[i].s2 == str2 && recent[i].s3 == str3
+					&& recent[i].at != 0 && g_timerGame >= recent[i].at && g_timerGame - recent[i].at < quiet)
+				return;
+		}
+
+		recent[next].s1 = str1;
+		recent[next].s2 = str2;
+		recent[next].s3 = str3;
+		recent[next].at = g_timerGame;
+		next = (next + 1) % 16;
+	}
+
 	if (str1 == STR_S_S_DESTROYED) {
 		format_str = String_Get_ByIndex(str1);
 

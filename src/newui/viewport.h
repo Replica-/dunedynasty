@@ -9,6 +9,7 @@ struct House;
 struct Structure;
 
 extern void Viewport_Init(void);
+extern void Viewport_UnitBodySprite(const struct Unit *u, uint16 *shapeID, int *flip);
 extern void Viewport_Hotkey(enum SquadID squad);
 extern void Viewport_NextBuilding(void);
 extern void Viewport_FocusOnStructure(const struct Structure *s);

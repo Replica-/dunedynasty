@@ -79,6 +79,8 @@ set(DUNEDYNASTY_SRC_FILES
 	src/scenario.c
 	src/sandstorm.c
 	src/airwing.c
+	src/remains.c
+	src/thumper.c
 	src/msglog.c
 	src/tithe.c
 	src/fog.c

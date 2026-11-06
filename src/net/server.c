@@ -38,6 +38,7 @@
 #include "../tools/encoded_index.h"
 #include "../tools/random_starport.h"
 #include "../airwing.h"
+#include "../thumper.h"
 #include "../unit.h"
 
 #if 0
@@ -1241,6 +1242,12 @@ Server_Recv_IssueUnitActionUntargetted(Unit *u, enum UnitActionType actionID)
 		return;
 	}
 
+	/* Replica: for infantry and soldiers the Retreat button plants a thumper. */
+	if (actionID == ACTION_RETREAT && Thumper_IsDropper(u) && House_IsHuman(Unit_GetHouseID(u))) {
+		Thumper_Drop(u);
+		return;
+	}
+
 	if (u->deviated != 0) {
 		Unit_Deviation_Decrease(u, 5);
 		if (u->deviated == 0)
@@ -1298,6 +1305,7 @@ Server_Recv_IssueUnitActionTargetted(Unit *u,
 	u->targetMove = 0;
 	u->route[0] = 0xFF;
 	u->detonateAtTarget = detonateAtTarget;
+	Airwing_OrderGiven(u);
 
 	Unit_Server_SetAction(u, actionID);
 

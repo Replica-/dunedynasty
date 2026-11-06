@@ -10,6 +10,8 @@
 #include "../explosion.h"
 #include "../airwing.h"
 #include "../fog.h"
+#include "../remains.h"
+#include "../thumper.h"
 #include "../map.h"
 #include "../newui/viewport.h"
 #include "../opendune.h"
@@ -39,6 +41,8 @@ void GUI_Widget_Viewport_Draw(void)
 
 	Fog_DrawBackground();
 	Viewport_DrawTiles();
+	Remains_Draw();
+	Thumper_Draw();
 	Fog_Draw();
 	Airwing_DrawPatrolAreas();
 	DayNight_DrawShadows();

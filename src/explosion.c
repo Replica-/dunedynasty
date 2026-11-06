@@ -20,6 +20,7 @@
 #include "pool/pool.h"
 #include "pool/pool_structure.h"
 #include "pool/pool_unit.h"
+#include "sandstorm.h"
 #include "scenario.h"
 #include "sprites.h"
 #include "structure.h"
@@ -697,8 +698,8 @@ static const struct {
 	[FX_BLAST_L] = { 70, false },
 	[FX_DUST]    = { 44, false },
 	[FX_GAS]     = { 90, false },
-	[FX_FLAME]   = { 24, true },
-	[FX_SMOKE]   = { 40, true },
+	[FX_FLAME]   = { 60, true },
+	[FX_SMOKE]   = { 90, true },
 	[FX_PRE]     = { 40, false },
 };
 
@@ -806,13 +807,15 @@ Fx_FireColour(float heat)
 {
 	static const unsigned char white[] = { 255, 246, 190 };
 	static const unsigned char yellow[] = { 255, 200, 70 };
-	static const unsigned char orange[] = { 244, 120, 24 };
+	static const unsigned char amber[] = { 252, 158, 40 };
+	static const unsigned char orange[] = { 236, 108, 22 };
 	static const unsigned char red[] = { 190, 52, 16 };
 	static const unsigned char ember[] = { 110, 40, 24 };
 
-	if (heat > 0.80f) return white;
-	if (heat > 0.58f) return yellow;
-	if (heat > 0.36f) return orange;
+	if (heat > 0.82f) return white;
+	if (heat > 0.64f) return yellow;
+	if (heat > 0.48f) return amber;
+	if (heat > 0.32f) return orange;
 	if (heat > 0.16f) return red;
 	return ember;
 }
@@ -820,15 +823,17 @@ Fx_FireColour(float heat)
 static const unsigned char *
 Fx_SmokeColour(float shade)
 {
-	static const unsigned char dark[] = { 44, 40, 38 };
-	static const unsigned char mid[] = { 78, 72, 68 };
-	static const unsigned char light[] = { 124, 116, 108 };
+	static const unsigned char black[] = { 30, 27, 26 };
+	static const unsigned char dark[] = { 50, 46, 43 };
+	static const unsigned char mid[] = { 80, 74, 70 };
+	static const unsigned char light[] = { 122, 114, 106 };
 	static const unsigned char pale[] = { 164, 156, 146 };
 
-	if (shade > 0.75f) return pale;
-	if (shade > 0.50f) return light;
-	if (shade > 0.25f) return mid;
-	return dark;
+	if (shade > 0.80f) return pale;
+	if (shade > 0.60f) return light;
+	if (shade > 0.40f) return mid;
+	if (shade > 0.20f) return dark;
+	return black;
 }
 
 /* A fireball: flash, shock ring, glowing particles that cool into smoke, and sparks.
@@ -922,86 +927,111 @@ Fx_DrawBlast(int bx, int by, float t, float radius, uint32 seed, int num, bool s
 	Prim_SetAdditive(false);
 }
 
-/* A burning wreck.  Flames lick upwards and turn into smoke. */
+/* The wind that blows the smoke, in pixels per tick: a light breeze, or the
+ * sandstorm's wind while one blows.  storm is how strong the storm is, 0 to 1.
+ */
 static void
-Fx_DrawFlame(int bx, int by, int64_t now, float env, uint32 seed)
+Fx_Wind(float *wx, float *wy, float *storm)
 {
-	const int num = 16;
+	float sx, sy;
+	const float k = Sandstorm_GetStrength();
 
-	/* Smoke first, so the flames sit on top of it. */
-	for (int i = 0; i < num; i++) {
-		const float phase = fmodf(now / 110.0f + (float)i / num + Fx_Rand(seed, i, 1) * 0.1f, 1.0f);
-		const float wobble = sinf(phase * 7.0f + i);
+	Sandstorm_GetWind(&sx, &sy);
+	*storm = k;
+	*wx = 0.09f * (1.0f - k) + sx * 0.65f * k;
+	*wy = sy * 0.65f * k;
+}
 
-		if (phase < 0.45f)
-			continue;
+/* A fire with a trail of smoke.  The smoke rises and is bent over by the wind,
+ * dark near the fire and paler as it spreads; in a sandstorm it is blown along
+ * flat behind the fire.  Flames lean with the wind, embers ride up the smoke, and
+ * the ground glows under it.  big is the burning wreck, else a smaller fire under
+ * a heavier column of smoke.
+ */
+static void
+Fx_DrawFireEx(int bx, int by, int64_t ticks, float smokeEnv, float flameEnv, uint32 seed, bool big)
+{
+	const float now = ticks / 1.1f;    /* A little slower than the clock: the fire is calmer. */
+	float wx, wy, storm;
 
-		Fx_Pixel(bx, by, wobble * 3.0f * phase + phase * 3.0f, 2.0f - phase * 26.0f,
-				2 + (int)(phase * 3.0f),
-				Fx_SmokeColour(0.1f + 0.5f * phase), 0.6f * env * (1.0f - phase));
+	Fx_Wind(&wx, &wy, &storm);
+
+	/* Smoke: each puff is born at the fire and lives out its life on the trail. */
+	const int smokeNum = big ? 48 : 55;
+	const float life = (big ? 150.0f : 190.0f) * (1.0f - 0.35f * storm);
+	const float rise = (big ? 0.20f : 0.24f) * (1.0f - 0.8f * storm);
+
+	for (int i = 0; i < smokeNum; i++) {
+		const float phase = fmodf(now / life + (float)i / smokeNum + Fx_Rand(seed, i, 1) * 0.05f, 1.0f);
+		const float a = phase * life;
+		const float curl = sinf(phase * 6.0f + i * 1.9f) * (1.0f + phase * 5.0f) * (1.0f - 0.7f * storm);
+		const float drift = a * (0.6f + 0.4f * phase);  /* Higher up, the wind takes it more. */
+
+		Fx_Pixel(bx, by,
+				wx * drift + curl,
+				2.0f - rise * a + wy * drift + curl * 0.3f,
+				3 + (int)(phase * (big ? 9.0f : 11.0f)),
+				Fx_SmokeColour(0.05f + 0.85f * phase * phase),
+				(big ? 0.85f : 0.92f) * smokeEnv * powf(1.0f - phase, 1.1f) * Fx_Clamp01(phase * 9.0f));
 	}
 
 	Prim_SetAdditive(true);
 
-	for (int i = 0; i < num; i++) {
-		const float phase = fmodf(now / 38.0f + (float)i / num + Fx_Rand(seed, i, 2) * 0.1f, 1.0f);
+	/* A glow on the ground, pulsing with the flames. */
+	{
+		static const unsigned char glow[] = { 120, 46, 10 };
+		const float pulse = 0.75f + 0.25f * sinf(now * 0.31f + seed);
+
+		Fx_Pixel(bx, by, 0.0f, 3.0f, big ? 16 : 11, glow, 0.30f * flameEnv * pulse);
+	}
+
+	/* The flames, leaning with the wind. */
+	const int flameNum = big ? 29 : 17;
+	const float height = big ? 15.0f : 9.0f;
+	const float spread = big ? 8.0f : 5.0f;
+
+	for (int i = 0; i < flameNum; i++) {
+		const float phase = fmodf(now / (big ? 34.0f : 28.0f) + (float)i / flameNum + Fx_Rand(seed, i, 2) * 0.1f, 1.0f);
 		const float heat = 1.0f - phase * 1.15f;
 
 		if (heat <= 0.12f)
 			continue;
 
 		Fx_Pixel(bx, by,
-				(Fx_Rand(seed, i, 3) - 0.5f) * 7.0f * (1.0f - phase) + sinf(phase * 9.0f + i) * 1.4f,
-				3.0f - phase * 14.0f,
-				3 - (int)(phase * 2.2f),
-				Fx_FireColour(heat), env * (1.0f - phase * 0.6f));
+				(Fx_Rand(seed, i, 3) - 0.5f) * spread * (1.0f - phase * 0.8f)
+					+ sinf(phase * 9.0f + i) * 1.3f + wx * phase * 40.0f,
+				4.0f - phase * height + wy * phase * 20.0f,
+				(big ? 4 : 3) - (int)(phase * (big ? 3.0f : 2.2f)),
+				Fx_FireColour(heat), flameEnv * (1.0f - phase * 0.55f));
+	}
+
+	/* Embers, carried up and away on the smoke. */
+	for (int i = 0; i < (big ? 10 : 6); i++) {
+		static const unsigned char ember[] = { 255, 170, 60 };
+		const float phase = fmodf(now / 95.0f + (float)i / 8.0f + Fx_Rand(seed, i, 7) * 0.5f, 1.0f);
+		const float a = phase * 95.0f;
+		const float flicker = (Fx_Hash(seed + i, (uint32)(now / 4)) & 3) ? 1.0f : 0.3f;
+
+		Fx_Pixel(bx, by,
+				wx * a * 1.2f + (Fx_Rand(seed, i, 8) - 0.5f) * 10.0f * phase,
+				2.0f - a * 0.32f * (1.0f - 0.7f * storm) + wy * a * 1.2f,
+				1, ember, flameEnv * flicker * (1.0f - phase));
 	}
 
 	Prim_SetAdditive(false);
 }
 
-/* A small fire where a smoke plume starts. */
 static void
-Fx_DrawFlameBase(int bx, int by, int64_t now, float env, uint32 seed)
+Fx_DrawFire(int bx, int by, int64_t now, float env, uint32 seed, bool big)
 {
-	Prim_SetAdditive(true);
-
-	for (int i = 0; i < 10; i++) {
-		const float phase = fmodf(now / 30.0f + (float)i / 10 + Fx_Rand(seed, i, 5) * 0.1f, 1.0f);
-		const float heat = 1.0f - phase * 1.2f;
-
-		if (heat <= 0.12f)
-			continue;
-
-		Fx_Pixel(bx, by,
-				(Fx_Rand(seed, i, 6) - 0.5f) * 6.0f * (1.0f - phase * 0.7f),
-				4.0f - phase * 8.0f,
-				2 - (int)(phase * 1.5f),
-				Fx_FireColour(heat), env * (1.0f - phase * 0.5f));
-	}
-
-	Prim_SetAdditive(false);
+	Fx_DrawFireEx(bx, by, now, env, env, seed, big);
 }
 
-/* A smoke plume, rising and spreading in the wind, from a small fire. */
-static void
-Fx_DrawSmoke(int bx, int by, int64_t now, float env, uint32 seed)
+void
+Explosion_DrawFire(int x, int y, float smoke, float flames, uint32 seed)
 {
-	const int num = 18;
-
-	for (int i = 0; i < num; i++) {
-		const float phase = fmodf(now / 150.0f + (float)i / num + Fx_Rand(seed, i, 1) * 0.08f, 1.0f);
-		const float wobble = sinf(phase * 5.0f + i * 1.7f);
-
-		Fx_Pixel(bx, by,
-				wobble * (1.0f + phase * 4.0f) + phase * phase * 9.0f,
-				4.0f - phase * 36.0f,
-				2 + (int)(phase * 5.0f),
-				Fx_SmokeColour(0.2f + 0.8f * phase),
-				0.7f * env * (1.0f - phase) * Fx_Clamp01(phase * 6.0f));
-	}
-
-	Fx_DrawFlameBase(bx, by, now, env, seed);
+	if (VideoA5_HardwareEffectsActive())
+		Fx_DrawFireEx(x, y, Timer_GetTicks(), Fx_Clamp01(smoke), Fx_Clamp01(flames), seed, false);
 }
 
 /* Billows of tinted gas that grow and drift. */
@@ -1017,7 +1047,7 @@ Fx_DrawGas(int bx, int by, float t, uint8 houseID, uint32 seed)
 	const unsigned char *base = tint[(houseID < 3) ? houseID : 3];
 	const float env = Fx_Clamp01(t * 8.0f) * Fx_Clamp01((1.0f - t) * 3.0f);
 
-	for (int i = 0; i < 24; i++) {
+	for (int i = 0; i < 29; i++) {
 		const float angle = FX_TWO_PI * Fx_Rand(seed, i, 1);
 		const float dist = (3.0f + 9.0f * Fx_Rand(seed, i, 2)) * (0.4f + 0.6f * Fx_Clamp01(t * 3.0f));
 		const float shade = 0.65f + 0.35f * Fx_Rand(seed, i, 3);
@@ -1079,13 +1109,13 @@ Fx_Draw(const FxInstance *fx, int64_t now)
 		/* Muzzle flashes (SPARK) keep their size.  Bullet impacts (BLAST_S) are a
 		 * puff without smoke.  Only deaths and structures get a fireball.
 		 */
-		case FX_SPARK:   Fx_DrawBlast(x, y, t, 4.0f, fx->seed, 7, false); break;
-		case FX_HIT:     Fx_DrawBlast(x, y, t, 2.5f, fx->seed, 4, false); break;
-		case FX_BLAST_S: Fx_DrawBlast(x, y, t, 5.0f, fx->seed, 9, false); break;
-		case FX_BLAST_M: Fx_DrawBlast(x, y, t, 11.0f, fx->seed, 28, true); break;
-		case FX_PRE:     Fx_DrawBlast(x, y, t, 9.0f, fx->seed, 22, true); break;
-		case FX_BLAST_L: Fx_DrawBlast(x, y, t, 17.0f, fx->seed, 44, true); break;
-		case FX_DUST:    Fx_DrawDust(x, y, t, 12.0f, 16, fx->seed); break;
+		case FX_SPARK:   Fx_DrawBlast(x, y, t, 4.0f, fx->seed, 8, false); break;
+		case FX_HIT:     Fx_DrawBlast(x, y, t, 2.5f, fx->seed, 5, false); break;
+		case FX_BLAST_S: Fx_DrawBlast(x, y, t, 5.0f, fx->seed, 11, false); break;
+		case FX_BLAST_M: Fx_DrawBlast(x, y, t, 11.0f, fx->seed, 34, true); break;
+		case FX_PRE:     Fx_DrawBlast(x, y, t, 9.0f, fx->seed, 26, true); break;
+		case FX_BLAST_L: Fx_DrawBlast(x, y, t, 17.0f, fx->seed, 53, true); break;
+		case FX_DUST:    Fx_DrawDust(x, y, t, 12.0f, 19, fx->seed); break;
 		case FX_GAS:     Fx_DrawGas(x, y, t, fx->houseID, fx->seed); break;
 
 		case FX_FLAME:
@@ -1095,9 +1125,9 @@ Fx_Draw(const FxInstance *fx, int64_t now)
 			const float env = Fx_Clamp01(age / 12.0f) * fadeOut;
 
 			if (fx->kind == FX_FLAME)
-				Fx_DrawFlame(x, y, now, env, fx->seed);
+				Fx_DrawFire(x, y, now, env, fx->seed, true);
 			else
-				Fx_DrawSmoke(x, y, now, env, fx->seed);
+				Fx_DrawFire(x, y, now, env, fx->seed, false);
 			break;
 		}
 
@@ -1160,10 +1190,54 @@ Fx_CancelWaiting(uint16 packed, int64_t now)
 	}
 }
 
+
+/* --test-fire: fires and smoke plumes beside the construction yard, a screenshot
+ * once the smoke has built up, then quit.  With --sandstorm-now, the smoke is in a storm.
+ */
+bool g_debugTestFire = false;
+
+static void
+Explosion_DebugTestFire(int64_t now)
+{
+	static int64_t start = -1;
+	static bool shot = false;
+
+	if (start < 0) {
+		PoolFindStruct find;
+		const Structure *s = Structure_FindFirst(&find, g_playerHouseID, STRUCTURE_CONSTRUCTION_YARD);
+
+		if (s == NULL)
+			return;
+
+		start = now;
+		Map_CentreViewport((s->o.position.x >> 4) + 16, (s->o.position.y >> 4) + 16);
+
+		for (int i = 0; i < 4; i++) {
+			tile32 t = s->o.position;
+
+			t.x += (uint16)(256 * (2 * (i % 2) - 1) * 3);
+			t.y += (uint16)(256 * (i / 2) * 3 + 256);
+			Explosion_Start((i < 2) ? EXPLOSION_TANK_FLAMES : EXPLOSION_SMOKE_PLUME, Tile_Center(t), g_playerHouseID);
+		}
+		return;
+	}
+
+	if (!shot && now - start > 200) {
+		shot = true;
+		VideoA5_CaptureScreenshot();
+	}
+
+	if (shot && now - start > 260)
+		exit(0);
+}
+
 static void
 Explosion_DrawHardware(void)
 {
 	const int64_t now = Timer_GetTicks();
+
+	if (g_debugTestFire)
+		Explosion_DebugTestFire(now);
 
 	for (int i = 1; i < s_explosions.num_elem; i++) {
 		const Explosion *e = (const Explosion *)BinHeap_GetElem(&s_explosions, i);

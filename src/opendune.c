@@ -30,6 +30,8 @@ extern int _al_mangled_main(int argc, char **argv);
 #include "common_a5.h"
 #include "sandstorm.h"
 #include "airwing.h"
+#include "remains.h"
+#include "thumper.h"
 #include "audio/audio_a5.h"
 #include "tithe.h"
 #include "daynight.h"
@@ -681,6 +683,18 @@ int main(int argc, char **argv)
 
 		if (strcmp(argv[i], "--record-audio") == 0 && i + 1 < argc)
 			g_recordAudioPath = argv[++i];
+
+		if (strcmp(argv[i], "--test-hunt") == 0)
+			g_debugTestHunt = true;
+
+		if (strcmp(argv[i], "--test-thumper") == 0)
+			g_debugTestThumper = true;
+
+		if (strcmp(argv[i], "--test-remains") == 0)
+			g_debugTestRemains = true;
+
+		if (strcmp(argv[i], "--test-fire") == 0)
+			g_debugTestFire = true;
 
 		if (strcmp(argv[i], "--test-air-defence") == 0)
 			g_debugTestAirDefence = true;

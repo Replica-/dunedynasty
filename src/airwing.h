@@ -11,6 +11,8 @@ struct Unit;
 extern int  g_debugSpawnOrnithopters;   /* From --spawn-ornithopters N: N of them for the player at the start. */
 extern bool g_debugTestAirwing;         /* From --test-ornithopters: logs to ornithopter_test.log, then quits. */
 extern bool g_debugTestAirDefence;      /* From --test-air-defence: enemy troopers under a patrol; logs, then quits. */
+extern bool g_debugTestHunt;            /* From --test-hunt: the player's ground units hunt; logs who stops. */
+extern void Airwing_DebugTestHunt(void);
 
 extern void Airwing_Tick(void);         /* Server logic. */
 extern void Airwing_OrderGiven(const struct Unit *u);  /* The player gave it an order: a patrol starts afresh. */

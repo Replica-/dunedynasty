@@ -3873,3 +3873,60 @@ VideoA5_RebuildHousePalette(enum HouseType houseID)
 		GUI_Palette_RemapScreen(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, g_screenActiveID, g_remap);
 	}
 }
+
+/*--------------------------------------------------------------*/
+
+/* Copies of a shape or an icon in bitmaps of their own: the remains of the dead
+ * are worn away pixel by pixel, which the shared textures cannot be.
+ */
+static ALLEGRO_BITMAP *
+VideoA5_CopyRegion(ALLEGRO_BITMAP *src, int sx, int sy, int w, int h)
+{
+	ALLEGRO_STATE state;
+	ALLEGRO_TRANSFORM identity;
+
+	al_store_state(&state, ALLEGRO_STATE_TARGET_BITMAP | ALLEGRO_STATE_BLENDER | ALLEGRO_STATE_TRANSFORM | ALLEGRO_STATE_NEW_BITMAP_PARAMETERS);
+	al_set_new_bitmap_flags(ALLEGRO_VIDEO_BITMAP);
+
+	ALLEGRO_BITMAP *dst = al_create_bitmap(w, h);
+
+	if (dst != NULL) {
+		al_set_target_bitmap(dst);
+		al_identity_transform(&identity);
+		al_use_transform(&identity);
+		al_clear_to_color(al_map_rgba(0, 0, 0, 0));
+		al_set_blender(ALLEGRO_ADD, ALLEGRO_ONE, ALLEGRO_ZERO);
+		al_draw_bitmap_region(src, sx, sy, w, h, 0, 0, 0);
+	}
+
+	al_restore_state(&state);
+	return dst;
+}
+
+ALLEGRO_BITMAP *
+VideoA5_CopyShape(enum ShapeID shapeID, enum HouseType houseID)
+{
+	if (shapeID >= SHAPEID_MAX || houseID >= HOUSE_NEUTRAL)
+		return NULL;
+
+	ALLEGRO_BITMAP *bmp = (s_shape[shapeID][houseID] != NULL) ? s_shape[shapeID][houseID] : s_shape[shapeID][HOUSE_HARKONNEN];
+
+	if (bmp == NULL)
+		return NULL;
+
+	return VideoA5_CopyRegion(bmp, 0, 0, al_get_bitmap_width(bmp), al_get_bitmap_height(bmp));
+}
+
+ALLEGRO_BITMAP *
+VideoA5_CopyIcon(uint16 iconID, enum HouseType houseID)
+{
+	if (iconID >= ICONID_MAX || houseID >= HOUSE_NEUTRAL || icon_texture == NULL)
+		return NULL;
+
+	const IconCoord *coord = &s_icon[iconID][houseID];
+
+	if (coord->sx == 0 && coord->sy == 0)
+		return NULL;
+
+	return VideoA5_CopyRegion(icon_texture, coord->sx, coord->sy, TILE_SIZE, TILE_SIZE);
+}

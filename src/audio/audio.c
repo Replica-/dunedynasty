@@ -709,3 +709,15 @@ Audio_SetSandstormWind(float volume)
 
 	AudioA5_SetWind(volume);
 }
+
+/**
+ * The thud of a thumper, quiet.  volume 0 to 1, pan -1 (left) to 1 (right).
+ */
+void
+Audio_PlayThump(float volume, float pan)
+{
+	if (!g_enable_audio || g_enable_sound_effects == SOUNDEFFECTS_NONE)
+		return;
+
+	AudioA5_PlayThump(volume, pan);
+}
