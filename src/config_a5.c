@@ -152,6 +152,7 @@ static const GameOption s_game_option[] = {
 	{ "graphics",   "floating_message_log", CONFIG_BOOL,        .d._bool = &g_floating_log },
 	{ "graphics",   "sardaukar_tithe",  CONFIG_BOOL,            .d._bool = &g_tithe },
 	{ "graphics",   "hardware_effects", CONFIG_BOOL,            .d._bool = &g_hardware_effects },
+	{ "graphics",   "show_fps",         CONFIG_BOOL,            .d._bool = &g_show_fps },
 
 	{ "controls",   "auto_scroll",              CONFIG_BOOL,    .d._bool = &g_gameConfig.autoScroll },
 	{ "controls",   "scroll_speed",             CONFIG_INT_1_16,.d._int = &g_gameConfig.scrollSpeed },

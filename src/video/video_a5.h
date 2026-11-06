@@ -19,6 +19,7 @@ typedef struct DisplayMode {
 extern enum GraphicsDriver g_graphics_driver;
 extern bool g_gl_post_fx;     /* [graphics] gl_post_fx (default on): GLSL post-processing of the final frame. */
 extern bool g_hardware_effects; /* [graphics] hardware_effects (default on): procedural explosions and smoke.  OpenGL only. */
+extern bool g_show_fps;        /* [graphics] show_fps (default on): frame rate and slowest frame, top left.  F10 toggles it. */
 extern bool VideoA5_HardwareEffectsAvailable(void); /* True with the OpenGL driver. */
 extern bool VideoA5_HardwareEffectsActive(void);    /* Available and enabled. */
 extern bool g_gl_post_fx_cli; /* From --gl-post. */

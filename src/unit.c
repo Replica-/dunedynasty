@@ -54,6 +54,7 @@
 #include "msglog.h"
 #include "remains.h"
 #include "tithe.h"
+#include "thumper.h"
 
 
 Unit *g_unitActive = NULL;
@@ -359,13 +360,18 @@ static void Unit_MovementTick(Unit *unit)
 static uint16 Unit_CountUnits(enum HouseType houseID, enum UnitType unit_type) {
 	uint16 count = 0;
 	PoolFindStruct find;
-	
+
+	/* Worms under the sand are off the map, but still count. */
+	if (unit_type == UNIT_SANDWORM) g_validateStrictIfZero++;
+
 	for (Unit *target = Unit_FindFirst(&find, houseID, unit_type);
 			target != NULL;
 			target = Unit_FindNext(&find)) {
 		count++;
 	}
-		
+
+	if (unit_type == UNIT_SANDWORM) g_validateStrictIfZero--;
+
 	return count;
 }
 
@@ -382,9 +388,17 @@ typedef struct SandwormProgress {
 	uint16 ignoredTarget;   /* Encoded target given up on. */
 	int64_t ignoreUntil;
 	uint16 tracked;         /* The target the closest distance (packed) is for. */
+	int64_t idleSince;      /* When it last had nothing to go for, or 0. */
+	int64_t sleepUntil;     /* Under the sand until then, or 0. */
+	int64_t nextWander;     /* When it may pick a new place to wander to. */
+	bool wandering;         /* Going to a place picked by Unit_Sandworm_Think. */
 } SandwormProgress;
 
 static SandwormProgress s_wormProgress[UNIT_INDEX_MAX_RAISED];
+
+static Unit *Unit_Sandworm_FindTarget(Unit *unit, bool anyRegion);
+static void Unit_Sandworm_Think(Unit *worm);
+static void Unit_Sandworm_WakeUp(void);
 
 void
 Unit_Sandworm_ResetProgress(void)
@@ -1115,6 +1129,7 @@ void GameLoop_Unit(void)
 	bool tickDeviation = false;
 
 	Unit_SandwormRespawn();
+	Unit_Sandworm_WakeUp();
 
 	// replica Sandworm create Count the player harvestors on the map and equal them
 	const int harvestor_count = Unit_CountUnits(g_playerHouseID, UNIT_HARVESTER);
@@ -1217,8 +1232,10 @@ void GameLoop_Unit(void)
 		if (tickMovement) {
 			Unit_MovementTick(u);
 
-			if (u->o.type == UNIT_SANDWORM && u->o.flags.s.allocated)
+			if (u->o.type == UNIT_SANDWORM && u->o.flags.s.allocated) {
 				Unit_Sandworm_CheckStuck(u);
+				Unit_Sandworm_Think(u);
+			}
 
 			if (u->fireDelay != 0) {
 				if (ui->movementType == MOVEMENT_WINGER && !ui->flags.isNormalUnit) {
@@ -1319,6 +1336,16 @@ void GameLoop_Unit(void)
 		}
 
 		/* The Sardaukar tithe frigate is flown by the tithe, not by a script. */
+		/* Replica: a dying unit whose script was stopped (hidden in a carryall
+		 * or a structure, say) would stay a wreck for ever.  Start dying again.
+		 */
+		if (u->actionID == ACTION_DIE && !Script_IsLoaded(&u->o.script)) {
+			u->o.script.delay = 0;
+			Script_Reset(&u->o.script, g_scriptUnit);
+			u->o.script.variables[0] = ACTION_DIE;
+			Script_Load(&u->o.script, u->o.type);
+		}
+
 		if (tickScript && !Tithe_ControlsUnit(u)) {
 			if (u->o.script.delay == 0) {
 				if (Script_IsLoaded(&u->o.script)) {
@@ -2073,9 +2100,6 @@ static uint16 Unit_Sandworm_GetTargetPriority(Unit *unit, Unit *target)
 	if (!g_table_landscapeInfo[Map_GetLandscapeType(packed)].isSand)
 		return 0;
 
-	/* Replica: not across rock it cannot get over. */
-	if (!Unit_Sandworm_CanReach(unit, packed))
-		return 0;
 
 	/* SINGLE PLAYER -- Sandworms will only target units in scouted
 	 * territory.  Presumably this was done to prevent sandworms
@@ -2151,6 +2175,34 @@ bool Unit_SandwormsHuntHarvesters(Unit **target)
  */
 Unit *Unit_Sandworm_FindBestTarget(Unit *unit)
 {
+	return Unit_Sandworm_FindTarget(unit, false);
+}
+
+/* Replica: the stretch of sand (see Unit_Sandworm_UpdateRegions) at a place, or 0. */
+static uint16
+Unit_Sandworm_RegionAt(tile32 position)
+{
+	Unit_Sandworm_UpdateRegions();
+	return s_wormRegion[Tile_PackTile(position)];
+}
+
+/* A target the worm could get at: a unit on the map, on the same stretch of
+ * sand as the worm.
+ */
+static bool
+Unit_Sandworm_CanReachUnit(const Unit *worm, const Unit *target)
+{
+	if (target->o.flags.s.isNotOnMap)
+		return false;
+
+	const uint16 region = Unit_Sandworm_RegionAt(target->o.position);
+
+	return region != 0 && region == Unit_Sandworm_RegionAt(worm->o.position);
+}
+
+static Unit *
+Unit_Sandworm_FindTarget(Unit *unit, bool anyRegion)
+{
 	Unit *best = NULL;
 	PoolFindStruct find;
 	uint16 bestPriority = 0;
@@ -2169,6 +2221,7 @@ Unit *Unit_Sandworm_FindBestTarget(Unit *unit)
 				u != NULL;
 				u = Unit_FindNext(&find)) {
 			if (u->o.flags.s.isNotOnMap || Unit_Sandworm_IsIgnored(unit, u)) continue;
+			if (!anyRegion && !Unit_Sandworm_CanReachUnit(unit, u)) continue;
 
 			const uint16 priority = Unit_Sandworm_GetTargetPriority(unit, u);
 
@@ -2191,6 +2244,9 @@ Unit *Unit_Sandworm_FindBestTarget(Unit *unit)
 		// Replica skip targets this worm can't reach
 		if (Unit_Sandworm_IsIgnored(unit, u)) continue;
 
+		// Replica only units on sand the worm can get to
+		if (!anyRegion && !Unit_Sandworm_CanReachUnit(unit, u)) continue;
+
 		// Replica dont attack AI things that are area guarding
 		if (u->actionID == ACTION_AREA_GUARD && Unit_GetHouseID(u) != g_playerHouseID) continue;
 	    // Replica dont attack ai controlled harvesters because they are shiny and nice :)
@@ -2207,6 +2263,207 @@ Unit *Unit_Sandworm_FindBestTarget(Unit *unit)
 	if (bestPriority == 0) return NULL;
 
 	return best;
+}
+
+/* Replica: a worm with nothing it can get at on its own sand dives for ten
+ * seconds, and comes up again on the sand of something it can eat.  With
+ * nothing to eat anywhere, it wanders about.
+ */
+#define SANDWORM_IDLE_TICKS 120         /* Two seconds without a target before it decides. */
+#define SANDWORM_SLEEP_SECONDS 10
+#define SANDWORM_WANDER_RADIUS 8
+
+static void
+Unit_Sandworm_DropTarget(Unit *worm)
+{
+	worm->targetAttack = 0;
+	worm->targetMove = 0;
+	worm->route[0] = 0xFF;
+	worm->currentDestination.x = 0;
+	worm->currentDestination.y = 0;
+}
+
+/* A random sand tile of the given region, between minDist and maxDist tiles
+ * from the centre and without a unit on it, or 0.
+ */
+static uint16
+Unit_Sandworm_FindTileInRegion(uint16 region, uint16 centre, int minDist, int maxDist)
+{
+	const int cx = Tile_GetPackedX(centre);
+	const int cy = Tile_GetPackedY(centre);
+	uint16 found = 0;
+	int candidates = 0;
+
+	Unit_Sandworm_UpdateRegions();
+
+	for (int y = cy - maxDist; y <= cy + maxDist; y++) {
+		for (int x = cx - maxDist; x <= cx + maxDist; x++) {
+			if (!Map_InRangeX(x) || !Map_InRangeY(y))
+				continue;
+
+			if (max(abs(x - cx), abs(y - cy)) < minDist)
+				continue;
+
+			const uint16 packed = Tile_PackXY(x, y);
+
+			if (s_wormRegion[packed] != region || Unit_Get_ByPackedTile(packed) != NULL)
+				continue;
+
+			/* Pick one of them evenly, as they are found. */
+			candidates++;
+			if ((Tools_Random_256() * candidates) / 256 == 0)
+				found = packed;
+		}
+	}
+
+	return found;
+}
+
+static void
+Unit_Sandworm_Think(Unit *worm)
+{
+	SandwormProgress *p = &s_wormProgress[worm->o.index];
+
+	if (worm->actionID == ACTION_DIE || worm->actionID == ACTION_DESTRUCT)
+		return;
+
+	/* A target that has left the worm's sand is dropped at once. */
+	if (worm->targetAttack != 0) {
+		const Unit *target = Tools_Index_GetUnit(worm->targetAttack);
+
+		if (target == NULL || Unit_Sandworm_CanReachUnit(worm, target)) {
+			p->idleSince = 0;
+			return;
+		}
+
+		Unit_Sandworm_DropTarget(worm);
+		Unit_Server_SetAction(worm, ACTION_HUNT);
+	}
+
+	/* Something on its own sand, or a thumper it can hear: the script will go for it. */
+	if (Unit_Sandworm_FindTarget(worm, false) != NULL || Thumper_WormTarget(worm) != 0) {
+		p->idleSince = 0;
+
+		/* Not wandering off instead. */
+		if (p->wandering) {
+			p->wandering = false;
+			Unit_Sandworm_DropTarget(worm);
+			Unit_Server_SetAction(worm, ACTION_HUNT);
+		}
+		return;
+	}
+
+	if (p->idleSince == 0 || p->idleSince > g_timerGame) {
+		p->idleSince = g_timerGame;
+		return;
+	}
+
+	if (g_timerGame - p->idleSince < SANDWORM_IDLE_TICKS)
+		return;
+
+	/* Something to eat on other sand: dive, and come up there. */
+	if (Unit_Sandworm_FindTarget(worm, true) != NULL) {
+		Unit_UpdateMap(0, worm);
+		Unit_Sandworm_DropTarget(worm);
+		Unit_SetSpeed(worm, 0);
+		worm->o.flags.s.isNotOnMap = true;
+
+		p->idleSince = 0;
+		p->wandering = false;
+		p->sleepUntil = g_timerGame + Tools_AdjustToGameSpeed(60 * SANDWORM_SLEEP_SECONDS, 1, 0xFFFF, true);
+		if (p->sleepUntil == 0) p->sleepUntil = 1;
+		return;
+	}
+
+	/* Nothing anywhere: wander about its own sand. */
+	if (worm->targetMove == 0) p->wandering = false;
+	if (worm->targetMove != 0 || Unit_IsMoving(worm) || g_timerGame < p->nextWander)
+		return;
+
+	const uint16 region = Unit_Sandworm_RegionAt(worm->o.position);
+	const uint16 packed = Unit_Sandworm_FindTileInRegion(region, Tile_PackTile(worm->o.position), 3, SANDWORM_WANDER_RADIUS);
+
+	p->nextWander = g_timerGame + 60 * 3 + Tools_Random_256();
+
+	if (region != 0 && packed != 0) {
+		Unit_SetDestination(worm, Tools_Index_Encode(packed, IT_TILE));
+		p->wandering = true;
+	}
+}
+
+/* A worm is being carried if a carryall holds it. */
+static bool
+Unit_Sandworm_IsCarried(const Unit *worm)
+{
+	PoolFindStruct find;
+
+	for (const Unit *c = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_CARRYALL); c != NULL; c = Unit_FindNext(&find)) {
+		if (c->o.flags.s.inTransport && c->o.linkedID == (worm->o.index & 0xFF))
+			return true;
+	}
+
+	return false;
+}
+
+static void
+Unit_Sandworm_WakeUp(void)
+{
+	PoolFindStruct find;
+
+	g_validateStrictIfZero++;
+	for (Unit *worm = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_SANDWORM); worm != NULL; worm = Unit_FindNext(&find)) {
+		SandwormProgress *p = &s_wormProgress[worm->o.index];
+
+		if (!worm->o.flags.s.isNotOnMap)
+			continue;
+
+		/* A worm that went under before a game was saved has lost its timer. */
+		if (p->sleepUntil == 0) {
+			if (Unit_Sandworm_IsCarried(worm))
+				continue;
+		} else if (g_timerGame < p->sleepUntil) {
+			continue;
+		}
+
+		const Unit *target = Unit_Sandworm_FindTarget(worm, true);
+		const uint16 dived = Tile_PackTile(worm->o.position);
+		uint16 packed = 0;
+
+		if (target != NULL) {
+			const uint16 region = Unit_Sandworm_RegionAt(target->o.position);
+			const uint16 at = Tile_PackTile(target->o.position);
+
+			packed = Unit_Sandworm_FindTileInRegion(region, at, 5, 9);
+			if (packed == 0) packed = Unit_Sandworm_FindTileInRegion(region, at, 2, 16);
+		}
+
+		/* Nothing (left) to go for: up where it went down, to wander. */
+		if (packed == 0 && Map_IsValidPosition(dived) && Unit_Sandworm_Passable(dived))
+			packed = dived;
+
+		if (packed == 0) {
+			p->sleepUntil = g_timerGame + 60;
+			continue;
+		}
+
+		g_validateStrictIfZero--;
+		const bool placed = Unit_SetPosition(worm, Tile_UnpackTile(packed));
+		g_validateStrictIfZero++;
+
+		if (!placed) {
+			p->sleepUntil = g_timerGame + 60;
+			continue;
+		}
+
+		p->sleepUntil = 0;
+		p->idleSince = 0;
+		p->wandering = false;
+		p->packed = 0xFFFF;
+		p->since = g_timerGame;
+		worm->o.seenByHouses = 0xFF;
+		Unit_Server_SetAction(worm, ACTION_HUNT);
+	}
+	g_validateStrictIfZero--;
 }
 
 /**
@@ -3576,6 +3833,11 @@ void Unit_EnterStructure(Unit *unit, Structure *s)
 		Unit_Remove(unit);
 		return;
 	}
+
+	/* Replica: a dying unit finishes dying outside; hiding it would stop its
+	 * death script and leave a wreck for ever.
+	 */
+	if (unit->actionID == ACTION_DIE) return;
 
 	unit->o.seenByHouses |= s->o.seenByHouses;
 	Unit_Hide(unit);

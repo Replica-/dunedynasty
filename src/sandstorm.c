@@ -245,9 +245,10 @@ Storm_Streak(int ox, int oy, int w, int h, float x, float y, int len, int thick,
  * The grains live on the map, so they stay put when the view scrolls.
  */
 
-#define MAX_GRAINS 3000
-#define GRAB_EVERY 3        /* Frames between looking at the screen. */
-#define MAX_PICKS 320
+#define MAX_GRAINS 1000
+#define GRAB_EVERY 6        /* Frames between looking at the screen (each look stalls the graphics card). */
+#define MAX_PICKS 96
+#define MIN_PICK_SPACING 12 /* Pixels apart that grains picked up at one look must be, so they spread out. */
 
 typedef struct Grain {
 	float x, y;             /* Map pixels. */
@@ -302,11 +303,17 @@ Storm_IsHardGround(enum LandscapeType type)
 static void
 Storm_AddGrain(float x, float y, const unsigned char *rgb, bool nearHard)
 {
-	for (int i = 0; i < MAX_GRAINS; i++) {
+	/* Look for a free grain from where the last one was found, not from the start every time. */
+	static int s_next = 0;
+
+	for (int n = 0; n < MAX_GRAINS; n++) {
+		const int i = (s_next + n) % MAX_GRAINS;
 		Grain *g = &s_grains[i];
 
 		if (g->life > 0.0f && g->age < g->life)
 			continue;
+
+		s_next = (i + 1) % MAX_GRAINS;
 
 		/* A constant speed, whatever the strength of the storm, so that nothing slows down or turns back. */
 		const float speed = 70.0f + 110.0f * Storm_Random01();
@@ -403,12 +410,12 @@ Storm_Grains(float k, float seconds, int w, int h, int ox, int oy)
 
 				SandTile *t = &s_sandTiles[numTiles++];
 				t->tx = tx; t->ty = ty; t->nearHard = nearHard;
-				t->weight = sand * (nearHard ? 1.0f : 0.35f);
+				t->weight = sand * (nearHard ? 0.6f : 0.35f);
 			}
 		}
 
 		/* Choose spots among them, which are all on sand that is on the screen. */
-		const float wanted = 900.0f * k * dt * GRAB_EVERY;
+		const float wanted = 300.0f * k * dt * GRAB_EVERY;
 		int attempts = (int)wanted + ((Storm_Random01() < (wanted - (int)wanted)) ? 1 : 0);
 
 		for (int a = 0; a < attempts * 2 && numPicks < MAX_PICKS - 3 && numTiles > 0; a++) {
@@ -420,20 +427,26 @@ Storm_Grains(float k, float seconds, int w, int h, int ox, int oy)
 			const int wx = t->tx * 16 + (int)(Storm_Random01() * 15.99f);
 			const int wy = t->ty * 16 + (int)(Storm_Random01() * 15.99f);
 
+			/* Not right next to another one, so the dust is spread out rather than in clumps. */
+			bool tooClose = false;
+			for (int j = 0; j < numPicks && !tooClose; j++)
+				tooClose = abs(picks[j].wx - wx) < MIN_PICK_SPACING && abs(picks[j].wy - wy) < MIN_PICK_SPACING;
+
+			if (tooClose)
+				continue;
+
 			Pick *p = &picks[numPicks++];
 			p->vx = wx + ox0; p->vy = wy + oy0; p->wx = wx; p->wy = wy; p->nearHard = t->nearHard;
 
 			if (t->nearHard) {
-				/* A whole puff of it along the edge. */
-				for (int extra = 1; extra <= 2; extra++) {
-					Pick *q = &picks[numPicks++];
+				/* A little more of it along the edge. */
+				Pick *q = &picks[numPicks++];
 
-					q->vx = p->vx - (int)(s_windX * 3.0f * extra);
-					q->vy = p->vy - (int)(s_windY * 3.0f * extra) + ((extra == 1) ? 1 : -1);
-					q->wx = q->vx - ox0;
-					q->wy = q->vy - oy0;
-					q->nearHard = true;
-				}
+				q->vx = p->vx - (int)(s_windX * 6.0f);
+				q->vy = p->vy - (int)(s_windY * 6.0f) + 1;
+				q->wx = q->vx - ox0;
+				q->wy = q->vy - oy0;
+				q->nearHard = true;
 			}
 		}
 

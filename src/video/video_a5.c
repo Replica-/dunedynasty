@@ -226,7 +226,7 @@ static const char s_post_default_frag[] =
 	"}\n";
 
 static bool take_screenshot = false;
-static bool show_fps = false;
+bool g_show_fps = true;
 static FadeInAux s_fadeInAux;
 
 /* VideoA5_GetNextXY:
@@ -749,7 +749,7 @@ VideoA5_ToggleFullscreen(void)
 void
 VideoA5_ToggleFPS(void)
 {
-	show_fps = !show_fps;
+	g_show_fps = !g_show_fps;
 }
 
 void
@@ -867,20 +867,47 @@ VideoA5_Tick(void)
 		fprintf(stdout, "screenshot: %s\n", filepath);
 	}
 
-	if (show_fps) {
+	if (g_show_fps) {
+		/* The slowest frame of the last half second shows a dip the average hides. */
+		static double l_prev_frame;
+		static double l_worst_frame;
+		static double l_last_worst;
 		const double curr_time = al_get_time();
-		char str[16];
+		char str[32];
 
-		/* Don't clobber the current font state. */
-		int len = snprintf(str, sizeof(str), "FPS:%4.2f", l_last_fps);
+		if (l_prev_frame > 0.0 && curr_time - l_prev_frame > l_worst_frame)
+			l_worst_frame = curr_time - l_prev_frame;
+		l_prev_frame = curr_time;
+
+		/* Don't clobber the current font state.  The size of the menu bar's
+		 * text, top right of the map, on a dark box.
+		 */
+		const int len = snprintf(str, sizeof(str), "FPS:%4.1f max %.0fms", l_last_fps, 1000.0 * l_last_worst);
+		const float scale = max(1.0f, (float)(int)(g_screenDiv[SCREENDIV_MENUBAR].scalex + 0.5f));
+		const float x0 = g_screenDiv[SCREENDIV_SIDEBAR].x - (6.0f * len + 12.0f) * scale;
+		const float y0 = g_screenDiv[SCREENDIV_VIEWPORT].y + 4.0f * scale;
+		const float h = al_get_bitmap_height(s_font[2]['0']);
+
+		al_draw_filled_rectangle(x0 - 2.0f * scale, y0 - 2.0f * scale,
+				x0 + (6.0f * len + 1.0f) * scale, y0 + (h + 1.0f) * scale, al_map_rgba(0, 0, 0, 160));
+
 		for (int i = 0; i < len; i++) {
 			const unsigned char c = str[i];
-			al_draw_tinted_bitmap(s_font[2][c], paltoRGB[15], 2 + 6 * i, 40, 0);
+			ALLEGRO_BITMAP *glyph = s_font[2][c];
+
+			if (glyph == NULL) continue;
+
+			al_draw_tinted_scaled_bitmap(glyph, paltoRGB[15], 0, 0,
+					al_get_bitmap_width(glyph), al_get_bitmap_height(glyph),
+					x0 + 6.0f * scale * i, y0,
+					al_get_bitmap_width(glyph) * scale, al_get_bitmap_height(glyph) * scale, 0);
 		}
 
 		l_fps++;
 		if (curr_time - l_last_time >= 0.5f) {
 			l_last_fps = l_fps / (curr_time - l_last_time);
+			l_last_worst = l_worst_frame;
+			l_worst_frame = 0.0;
 			l_last_time = al_get_time();
 			l_fps = 0;
 		}

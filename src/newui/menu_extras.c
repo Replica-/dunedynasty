@@ -30,6 +30,7 @@
 #include "../string.h"
 #include "../timer/timer.h"
 #include "../video/video.h"
+#include "../video/video_a5.h"
 #include "../wsa.h"
 
 enum ExtrasMenuCategory {
@@ -657,6 +658,10 @@ VideoOptions_Initialize(void)
 	si = Scrollbar_AllocItem(w, SCROLLBAR_CHECKBOX);
 	si->d.checkbox = &g_gameConfig.hardwareCursor;
 	snprintf(si->text, sizeof(si->text), "Hardware mouse cursor");
+
+	si = Scrollbar_AllocItem(w, SCROLLBAR_CHECKBOX);
+	si->d.checkbox = &g_show_fps;
+	snprintf(si->text, sizeof(si->text), "Show FPS counter (F10)");
 
 	GUI_Widget_Scrollbar_Init(w, ws->scrollMax, 6, 0);
 }

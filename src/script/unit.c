@@ -320,6 +320,14 @@ uint16 Script_Unit_Pickup(ScriptEngine *script)
 
 			if (!u2->o.flags.s.allocated) return 0;
 
+			/* Replica: not a unit that is dying.  Hiding it would stop its
+			 * death script, and it would be left as a wreck for ever.
+			 */
+			if (u2->actionID == ACTION_DIE || u2->o.hitpoints == 0) {
+				u->targetMove = 0;
+				return 0;
+			}
+
 			/* Find closest refinery / repair station */
 			for (const Structure *s2 = Structure_FindFirst(&find, Unit_GetHouseID(u), STRUCTURE_INVALID);
 					s2 != NULL;

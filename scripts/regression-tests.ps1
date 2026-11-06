@@ -67,7 +67,7 @@ $tests = @(
 	@{ n = "air-defence";      t = 120; k = "";     a = $mission + "--test-air-defence";
 	   d = "enemy troopers turn on ornithopters in range; their rockets lead the target and go off close" },
 	@{ n = "thumper";          t = 120; k = "";     a = $mission + "--test-thumper";
-	   d = "a soldier plants a thumper (100 credits); a worm comes and swallows it, and is no fuller" },
+	   d = "a soldier plants a thumper (50 credits); a worm comes and swallows it, and is no fuller" },
 	@{ n = "hunt";             t = 200; k = "";     a = $mission + "--test-hunt";
 	   d = "units on hunt with nothing in sight go and find the enemy, and hunt again after each kill" },
 	@{ n = "worm-respawn";     t = 240; k = "";     a = $mission + "--test-worm-respawn";

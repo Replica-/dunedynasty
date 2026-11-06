@@ -2,7 +2,8 @@
  *
  * A thumper beats on the sand.  Any sandworm near enough leaves what it was
  * after and goes for it instead, and swallows it.  It is not a meal: the worm is
- * no nearer to being full.  One costs 100 credits.  It beats for three minutes,
+ * no nearer to being full.  One costs 50 credits, and there can be five on the
+ * map at once, whoever planted them.  It beats for three minutes,
  * if no worm comes first.
  */
 
@@ -35,9 +36,8 @@
 #include "video/prim.h"
 #include "video/video_a5.h"
 
-#define MAX_THUMPERS 16
-#define MAX_PER_HOUSE 4
-#define THUMPER_COST 100
+#define MAX_THUMPERS 5               /* On the map at once, all houses together. */
+#define THUMPER_COST 50              /* Credits. */
 #define THUMPER_TICKS (180 * 60)     /* Three minutes. */
 #define THUMPER_RANGE 24            /* Tiles: the worms that hear it. */
 #define BEAT_TICKS 64               /* One blow a second or so... */
@@ -123,7 +123,6 @@ Thumper_Drop(Unit *u)
 	const uint8 houseID = Unit_GetHouseID(u);
 	House *h = House_Get_ByIndex(houseID);
 	const uint16 packed = Tile_PackTile(u->o.position);
-	int mine = 0;
 	Thumper *slot = NULL;
 
 	if (!g_table_landscapeInfo[Map_GetLandscapeType(packed)].isSand) {
@@ -142,18 +141,15 @@ Thumper_Drop(Unit *u)
 			Thumper_Message(houseID, "There is a thumper here already.");
 			return false;
 		}
-
-		if (s_thumpers[i].houseID == houseID)
-			mine++;
 	}
 
-	if (slot == NULL || mine >= MAX_PER_HOUSE) {
-		Thumper_Message(houseID, "Too many thumpers are beating already.");
+	if (slot == NULL) {
+		Thumper_Message(houseID, "There are five thumpers on the map already.");
 		return false;
 	}
 
 	if (h == NULL || h->credits < THUMPER_COST) {
-		Thumper_Message(houseID, "Not enough credits for a thumper (100).");
+		Thumper_Message(houseID, "Not enough credits for a thumper (50).");
 		return false;
 	}
 
@@ -366,7 +362,7 @@ Thumper_DebugTest(void)
 				}
 
 				if (h->credits != creditsBefore - THUMPER_COST) {
-					Thumper_Log("FAIL: credits %d -> %d, not 100 less", creditsBefore, h->credits);
+					Thumper_Log("FAIL: credits %d -> %d, not %d less", creditsBefore, h->credits, THUMPER_COST);
 					exit(1);
 				}
 
