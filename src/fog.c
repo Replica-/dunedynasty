@@ -31,7 +31,7 @@
 #define TICKS_PER_SECOND 60
 
 #define FOG_DAY 0.55f            /* How dark ground out of view is by day. */
-#define FOG_NIGHT 0.95f          /* ... and at night, when all that is left is the dark. */
+#define FOG_NIGHT 0.75f          /* ... and at night: lighter than the dark, so explored ground still shows. */
 #define CLEAR_SECONDS 0.3f       /* How long ground takes to clear when it comes into view. */
 #define CREEP_DAY_SECONDS 1.5f   /* How long it takes to fog over, by day. */
 #define CREEP_NIGHT_SECONDS 12.0f

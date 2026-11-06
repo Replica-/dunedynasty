@@ -31,6 +31,8 @@
 #include "newui/chatbox.h"
 #include "airwing.h"
 #include "msglog.h"
+#include "remains.h"
+#include "thumper.h"
 #include "newui/editbox.h"
 #include "newui/menubar.h"
 #include "newui/viewport.h"
@@ -92,6 +94,15 @@ GameLoop_Server_Logic(void)
 
 	if (g_debugTestPanel)
 		Unit_DebugTestPanel();
+
+	if (g_debugTestHunt)
+		Airwing_DebugTestHunt();
+
+	if (g_debugTestThumper)
+		Thumper_DebugTest();
+
+	if (g_debugTestRemains)
+		Remains_DebugTest();
 
 	if (g_debugTestOrders)
 		Unit_DebugTestOrders();

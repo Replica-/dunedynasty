@@ -183,6 +183,7 @@ extern void Unit_Select(Unit *unit);
 extern void Unit_NoteHit(const Unit *u);
 extern void Unit_NoteFired(const Unit *u);
 extern bool Unit_IsEngaged(const Unit *u);   /* Hit or firing a moment ago. */
+extern bool Unit_Sandworm_CanReach(const Unit *worm, uint16 packed);   /* Over sand all the way, by some path. */
 extern Unit *Unit_CreateWrapper(uint8 houseID, enum UnitType type, uint16 location);
 extern uint16 Unit_FindTargetAround(uint16 packed);
 extern bool Unit_IsTileOccupied(Unit *unit);

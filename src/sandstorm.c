@@ -43,8 +43,10 @@ enum StormState {
 	STORM_FADE
 };
 
-#define BUILD_SECONDS 7
-#define FADE_SECONDS 10
+#define BUILD_SECONDS 10
+#define FADE_SECONDS 15
+#define TURN_SECONDS 10     /* The wind changes direction this often, */
+#define TURNING_SECONDS 2   /* turning round over this long. */
 #define MIN_WAIT_SECONDS 150
 #define MAX_WAIT_SECONDS 330
 
@@ -54,8 +56,11 @@ static int64_t s_nextStorm = 0;     /* Game time. */
 static int64_t s_phaseStart = 0;
 static int64_t s_peakTicks = 0;
 static float s_strength = 1.0f;     /* How fierce this storm is at its peak. */
-static float s_windX = 1.0f;        /* The wind, a unit vector, picked when the storm starts and kept until it ends. */
+static float s_windX = 1.0f;        /* The wind, a unit vector: picked when the storm starts, and it turns as it blows. */
 static float s_windY = 0.0f;
+static float s_turnFrom = 0.0f;     /* The wind turns from this angle to s_turnTo, from s_turnStart on. */
+static float s_turnTo = 0.0f;
+static int64_t s_turnStart = 0;
 static uint32_t s_seed = 1;
 
 static uint32_t
@@ -95,12 +100,14 @@ Storm_Start(int64_t now)
 {
 	s_state = STORM_BUILD;
 	s_phaseStart = now;
-	s_peakTicks = (int64_t)(25 + Random_Xorshift_256() % 26) * TICKS_PER_SECOND;
+	s_peakTicks = (int64_t)(50 + Random_Xorshift_256() % 41) * TICKS_PER_SECOND;
 	s_strength = 0.6f + 0.4f * (Random_Xorshift_256() / 255.0f);
 	{
 		/* Any direction at all. */
 		const float angle = 6.2831853f * (Random_Xorshift_256() * 256u + Random_Xorshift_256()) / 65535.0f;
 
+		s_turnFrom = s_turnTo = angle;
+		s_turnStart = now;
 		s_windX = cosf(angle);
 		s_windY = sinf(angle);
 	}
@@ -116,6 +123,25 @@ Storm_UpdateRaw(int64_t now)
 		s_state = STORM_IDLE;
 		Storm_Schedule(now);
 		s_nextStorm += 60 * TICKS_PER_SECOND; /* Not in the first minutes. */
+	}
+
+	/* While a storm blows, the wind changes direction every so often, turning
+	 * round smoothly rather than all at once.
+	 */
+	if (s_state != STORM_IDLE) {
+		if (now - s_turnStart >= TURN_SECONDS * TICKS_PER_SECOND) {
+			const float swing = 1.75f * ((Random_Xorshift_256() / 255.0f) * 2.0f - 1.0f);  /* Up to 100 degrees. */
+
+			s_turnFrom = s_turnTo;
+			s_turnTo = s_turnFrom + swing;
+			s_turnStart = now;
+		}
+
+		const float t = Storm_Clamp01((float)(now - s_turnStart) / (TURNING_SECONDS * TICKS_PER_SECOND));
+		const float angle = s_turnFrom + (s_turnTo - s_turnFrom) * t * t * (3.0f - 2.0f * t);
+
+		s_windX = cosf(angle);
+		s_windY = sinf(angle);
 	}
 
 	const int64_t age = now - s_phaseStart;
@@ -586,4 +612,11 @@ Sandstorm_Tick(void)
 
 		s->o.hitpoints -= wear;
 	}
+}
+
+void
+Sandstorm_GetWind(float *x, float *y)
+{
+	*x = s_windX;
+	*y = s_windY;
 }
