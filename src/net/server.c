@@ -37,6 +37,7 @@
 #include "../tools/coord.h"
 #include "../tools/encoded_index.h"
 #include "../tools/random_starport.h"
+#include "../airwing.h"
 #include "../unit.h"
 
 #if 0
@@ -1258,6 +1259,7 @@ Server_Recv_IssueUnitActionUntargetted(Unit *u, enum UnitActionType actionID)
 	u->targetMove = 0;
 	u->route[0] = 0xFF;
 
+	Airwing_OrderGiven(u);
 	Unit_Server_SetAction(u, actionID);
 }
 
@@ -1275,7 +1277,7 @@ Server_Recv_IssueUnitActionTargetted(Unit *u,
 		actionID = ACTION_MOVE;
 		detonateAtTarget = true;
 	} else if (actionID == ACTION_INVALID
-			|| g_table_actionInfo[actionID].selectionType != SELECTIONTYPE_TARGET) {
+			|| (g_table_actionInfo[actionID].selectionType != SELECTIONTYPE_TARGET && !Airwing_ActionNeedsTarget(u, actionID))) {
 		return;
 	}
 
@@ -1299,6 +1301,13 @@ Server_Recv_IssueUnitActionTargetted(Unit *u,
 
 	Unit_Server_SetAction(u, actionID);
 
+	/* An ornithopter's patrol: the place is the middle of the area. */
+	if (Airwing_ActionNeedsTarget(u, actionID)) {
+		Airwing_SetPatrol(u, encoded);
+		u->moveIndicatorCounter = 10;
+		return;
+	}
+
 	Unit *target = NULL;
 	if (actionID == ACTION_MOVE) {
 		Unit_SetDestination(u, encoded);
@@ -1313,6 +1322,10 @@ Server_Recv_IssueUnitActionTargetted(Unit *u,
 	} else {
 		Unit_SetTarget(u, encoded);
 		target = Tools_Index_GetUnit(u->targetAttack);
+
+		/* An ornithopter's script picks its own targets: it is held to this one. */
+		if (actionID == ACTION_ATTACK)
+			Airwing_SetAttack(u, u->targetAttack);
 	}
 
 	if (target != NULL) {

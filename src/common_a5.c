@@ -13,6 +13,7 @@
 #include "input/input_a5.h"
 #include "input/mouse.h"
 #include "timer/timer_a5.h"
+#include "msglog.h"
 #include "video/video_a5.h"
 
 ALLEGRO_EVENT_QUEUE *g_a5_input_queue;
@@ -150,7 +151,7 @@ A5_InitTransform(bool screen_size_changed)
 
 	ScreenDiv *menubar = &g_screenDiv[SCREENDIV_MENUBAR];
 	A5_InitScreenDiv(target, SCREENDIV_MENUBAR,
-			0.0f, 0.0f, TRUE_DISPLAY_WIDTH, 40.0f);
+			0.0f, 0.0f, TRUE_DISPLAY_WIDTH, MsgLog_MenubarHeight());
 
 	ScreenDiv *sidebar = &g_screenDiv[SCREENDIV_SIDEBAR];
 	A5_InitScreenDiv(target, SCREENDIV_SIDEBAR,

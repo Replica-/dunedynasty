@@ -42,6 +42,7 @@
 #include "table/sound.h"
 #include "team.h"
 #include "tile.h"
+#include "daynight.h"
 #include "timer/timer.h"
 #include "tools/coord.h"
 #include "tools/random_lcg.h"
@@ -49,6 +50,10 @@
 #include "tools/encoded_index.h"
 #include "tools/orientation.h"
 #include "tools/random_general.h"
+#include "airwing.h"
+#include "msglog.h"
+#include "msglog.h"
+#include "tithe.h"
 
 
 Unit *g_unitActive = NULL;
@@ -594,7 +599,7 @@ Unit_DebugTestOrders(void)
 
 	/* The player lost everything: that is the end of the game, not a hang. */
 	if (g_gameMode != GM_NORMAL || g_gameOverlay == GAMEOVERLAY_LOSE || g_gameOverlay == GAMEOVERLAY_WIN
-			|| g_timerGame - startTick > 60 * 150) {
+			|| g_timerGame - startTick > 60 * 100) {
 		FILE *log = fopen("orders_test.log", "a");
 
 		if (log != NULL) {
@@ -1132,10 +1137,11 @@ void GameLoop_Unit(void)
 					tile = u->currentDestination;
 
 					if (Tools_Index_GetType(u->targetAttack) == IT_UNIT && g_table_unitInfo[Tools_Index_GetUnit(u->targetAttack)->o.type].movementType == MOVEMENT_WINGER) {
-						tile = Tools_Index_GetTile(u->targetAttack);
+						/* Replica: steer for where the aircraft will be, not where it is. */
+						Airwing_AimBullet(u, false);
+					} else {
+						Unit_SetOrientation(u, Tile_GetDirection(u->o.position, tile), false, 0);
 					}
-
-					Unit_SetOrientation(u, Tile_GetDirection(u->o.position, tile), false, 0);
 				}
 
 				u->fireDelay--;
@@ -1222,7 +1228,8 @@ void GameLoop_Unit(void)
 			}
 		}
 
-		if (tickScript) {
+		/* The Sardaukar tithe frigate is flown by the tithe, not by a script. */
+		if (tickScript && !Tithe_ControlsUnit(u)) {
 			if (u->o.script.delay == 0) {
 				if (Script_IsLoaded(&u->o.script)) {
 					/* The scripts compare
@@ -1452,7 +1459,7 @@ Unit_Server_SetAction(Unit *u, enum UnitActionType action)
 
 	switch (ai->switchType) {
 		case 0:
-			if (Unit_IsMoving(u)) {
+			if (Unit_IsMoving(u) && !Airwing_ActsAtOnce(u)) {
 				u->nextActionID = action;
 				return;
 			}
@@ -1747,6 +1754,10 @@ uint16 Unit_GetTargetUnitPriority(Unit *unit, Unit *target)
 	priority = targetInfo->o.priorityTarget + targetInfo->o.priorityBuild;
 	if (distance != 0) priority = (priority / distance) + 1;
 
+	/* Replica: units that can shoot at aircraft (troopers) see first to one in range. */
+	if (targetInfo->movementType == MOVEMENT_WINGER && distance <= unitInfo->fireDistance)
+		priority *= 3;
+
 	if (AI_IsBrutalAI(Unit_GetHouseID(unit))) {
 		/* Make brutal AI prefer to attack its own deviated vehicles with light guns. */
 		bool was_ally = House_AreAllied(Unit_GetHouseID(unit), target->o.houseID);
@@ -2013,14 +2024,25 @@ bool Unit_SandwormsHuntHarvesters(Unit **target)
 	uint16 count = 0;
 	Unit *lastUnit = NULL;
 
+	/* Replica: every harvester counts, also those unloading in a refinery or
+	 * being carried, which the search skips.  Without them the count kept dropping
+	 * back to 3 while one was unloading, and the worms never got going.  Only one
+	 * on the map can be the target.
+	 */
+	g_validateStrictIfZero++;
 	for (Unit *u = Unit_FindFirst(&find, g_playerHouseID, UNIT_HARVESTER);
 			u != NULL;
 			u = Unit_FindNext(&find)) {
-		lastUnit = u;
-		count++;
-	}
+		if (Unit_GetHouseID(u) != g_playerHouseID)
+			continue;
 
-	if (lastUnit == NULL || Unit_GetHouseID(lastUnit) != g_playerHouseID || count <= 3)
+		count++;
+		if (!u->o.flags.s.isNotOnMap)
+			lastUnit = u;
+	}
+	g_validateStrictIfZero--;
+
+	if (count <= 3)
 		return false;
 
 	if (target != NULL) *target = lastUnit;
@@ -2272,6 +2294,26 @@ Unit_RefreshFog(enum TileUnveilCause cause, const Unit *unit, bool unveil)
 
 	Tile_RefreshFogInRadius(House_GetAllies(Unit_GetHouseID(unit)), cause,
 			unit->o.position, fogUncoverRadius, unveil);
+
+	/* At night the headlights and flashlights show what is in their beam, well past what the
+	 * unit sees around itself.
+	 */
+	{
+		const UnitInfo *ui = &g_table_unitInfo[unit->o.type];
+
+		if (DayNight_IsNight() && DayNight_VisionLimit() == 0 && ui->flags.isGroundUnit
+				&& ui->flags.isNormalUnit && ui->movementType != MOVEMENT_WINGER) {
+			const int length = (ui->movementType == MOVEMENT_FOOT) ? 2 : 3;
+			const uint8 facing = (uint8)unit->orientation[ui->o.flags.hasTurret ? 1 : 0].current;
+
+			for (int k = 2; k <= length; k++) {
+				const tile32 spot = Tile_MoveByDirectionUnbounded(unit->o.position, facing, k * 256);
+
+				if (Tile_IsValid(spot))
+					Tile_RefreshFogInRadius(House_GetAllies(Unit_GetHouseID(unit)), cause, spot, 1, unveil);
+			}
+		}
+	}
 }
 
 void
@@ -2631,6 +2673,42 @@ bool Unit_Move(Unit *unit, uint16 distance)
 	return ret;
 }
 
+/* A unit in the middle of a fight: hit or firing a moment ago.  What it says when
+ * selected depends on it ("Under attack!" rather than "Reporting.").
+ */
+#define ENGAGED_HIT_TICKS   (6 * 60)
+#define ENGAGED_FIRE_TICKS  (4 * 60)
+
+static int64_t s_lastHit[UNIT_INDEX_MAX];
+static int64_t s_lastFired[UNIT_INDEX_MAX];
+
+void
+Unit_NoteHit(const Unit *u)
+{
+	if (u->o.index < UNIT_INDEX_MAX)
+		s_lastHit[u->o.index] = g_timerGame;
+}
+
+void
+Unit_NoteFired(const Unit *u)
+{
+	if (u->o.index < UNIT_INDEX_MAX)
+		s_lastFired[u->o.index] = g_timerGame;
+}
+
+bool
+Unit_IsEngaged(const Unit *u)
+{
+	if (u->o.index >= UNIT_INDEX_MAX)
+		return false;
+
+	const int64_t hit = s_lastHit[u->o.index], fired = s_lastFired[u->o.index];
+
+	/* A time from before this game (or another unit that had the index) does not count. */
+	return (hit > g_tickScenarioStart && g_timerGame - hit < ENGAGED_HIT_TICKS)
+		|| (fired > g_tickScenarioStart && g_timerGame - fired < ENGAGED_FIRE_TICKS);
+}
+
 /**
  * Applies damages to the given unit.
  *
@@ -2652,6 +2730,7 @@ bool Unit_Damage(Unit *unit, uint16 damage, uint16 range)
 	if (!ui->flags.isNormalUnit && unit->o.type != UNIT_SANDWORM) return false;
 
 	if (unit->o.hitpoints != 0) alive = true;
+	if (damage != 0) Unit_NoteHit(unit);
 
 	if (unit->o.hitpoints >= damage) {
 		unit->o.hitpoints -= damage;
@@ -2879,8 +2958,11 @@ void Unit_Select(Unit *unit)
 
 		ui = &g_table_unitInfo[unit->o.type];
 
-		/* Plays the 'reporting' sound file. */
-		if (unit->o.type != UNIT_SANDWORM
+		/* Plays the 'reporting' sound file, or in a fight "Under attack!" and the like. */
+		const bool busy = Unit_IsEngaged(unit)
+			&& Audio_PlayRadioVoice(unit->o.index, RADIO_BUSY);
+
+		if (unit->o.type != UNIT_SANDWORM && !busy
 				&& !Audio_PlayRadioVoice(unit->o.index, RADIO_SELECT)) {
 			const enum SampleID sampleID
 				= (ui->movementType == MOVEMENT_FOOT)
@@ -3072,6 +3154,13 @@ void Unit_SetSpeed(Unit *unit, uint16 speed)
 
 	if (speed == 0) return;
 
+	/* Patrolling ornithopters circle slowly. */
+	{
+		uint16_t limited = speed;
+
+		if (Airwing_LimitSpeed(unit, &limited)) speed = limited;
+	}
+
 	if (unit->o.type == UNIT_HARVESTER) {
 		speed = ((255 - unit->amount) * speed) / 256;
 	}
@@ -3082,7 +3171,15 @@ void Unit_SetSpeed(Unit *unit, uint16 speed)
 	}
 
 	unit->movingSpeed = speed & 0xFF;
-	speed = g_table_unitInfo[unit->o.type].movingSpeedFactor * speed / 256;
+	{
+		uint16 factor = g_table_unitInfo[unit->o.type].movingSpeedFactor;
+
+		/* Worms hunting harvesters (the high threat) are very fast. */
+		if (unit->o.type == UNIT_SANDWORM && Unit_SandwormsHuntHarvesters(NULL))
+			factor = 15;
+
+		speed = factor * speed / 256;
+	}
 	speed = Tools_AdjustToGameSpeed(speed, 1, 255, false);
 
 	speedPerTick = speed << 4;
@@ -3159,6 +3256,9 @@ Unit_CreateBullet(tile32 position, enum UnitType type, uint8 houseID, uint16 dam
 			u = Tools_Index_GetUnit(target);
 			if (u != NULL && g_table_unitInfo[u->o.type].movementType == MOVEMENT_WINGER) {
 				bullet->fireDelay <<= 1;
+
+				/* Replica: fired at an aircraft, it is aimed ahead of it. */
+				Airwing_AimBullet(bullet, true);
 			}
 
 			if (type != UNIT_MISSILE_HOUSE) {
@@ -3263,7 +3363,9 @@ void Unit_DisplayStatusText(const Unit *unit)
 			buffer[len + 1] = '\0';
 		}
 	}
+	MsgLog_Mute(true);   /* The status of the selection is not news. */
 	GUI_DisplayText(buffer, 2);
+	MsgLog_Mute(false);
 }
 
 void Unit_DisplayGroupStatusText(void)
@@ -3636,6 +3738,13 @@ uint16 Unit_FindBestTargetEncoded(Unit *unit, uint16 mode)
 
 	if (unit == NULL) return 0;
 
+	/* A patrolling ornithopter only goes for what comes into its area. */
+	{
+		uint16_t encoded;
+
+		if (Airwing_OverrideTarget(unit, &encoded)) return encoded;
+	}
+
 	s = NULL;
 
 	if (mode == 4) {
@@ -3808,10 +3917,10 @@ Unit_Server_LaunchHouseMissile(House *h, uint16 packed)
 	tile32 tile;
 
 	tile = Tile_UnpackTile(packed);
-	/* Death Hand: more accurate.  The scatter is up to 6.9 tiles and 4.2 on
-	 * average, down from 10 and 5.5 (spread 160).
+	/* Death Hand: a little more accurate than the original (scatter 160), a little
+	 * less than it was made (110).  Two of them on a map were too deadly.
 	 */
-	tile = Tile_MoveByRandom(tile, 110, false);
+	tile = Tile_MoveByRandom(tile, 140, false);
 	packed = Tile_PackTile(tile);
 	uint16 encoded = Tools_Index_Encode(packed, IT_TILE);
 

@@ -78,6 +78,11 @@ set(DUNEDYNASTY_SRC_FILES
 	src/saveload/unit.c
 	src/scenario.c
 	src/sandstorm.c
+	src/airwing.c
+	src/msglog.c
+	src/tithe.c
+	src/fog.c
+	src/sandworm_fx.c
 	src/script/general.c
 	src/script/script.c
 	src/script/structure.c

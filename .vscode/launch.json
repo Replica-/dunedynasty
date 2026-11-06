@@ -282,6 +282,96 @@
       ],
       "presentation": { "group": "6 Show me", "order": 8 }
     },
+    // ─────────────────────────  🎥 Record  ─────────────────────────
+    // Records the game window only (not the desktop) with the game's own sound only
+    // (not the rest of the computer), from when the window opens until a second and
+    // a half after the game is closed.  Saved to Videos\Dune Dynasty\dune_<date>.mp4.
+    // Needs ffmpeg on the PATH (winget install Gyan.FFmpeg).
+
+    {
+      "name": "🎥 Record: Mission 5 Atreides",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "powershell.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\record.ps1",
+               "--house", "atreides", "--mission", "5"],
+      "console": "externalTerminal",
+      "presentation": { "group": "7 Record", "order": 1 }
+    },
+    {
+      "name": "🎥 Record: ornithopters (--spawn-ornithopters 4)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "powershell.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\record.ps1",
+               "--house", "atreides", "--mission", "5", "--spawn-ornithopters", "4"],
+      "console": "externalTerminal",
+      "presentation": { "group": "7 Record", "order": 2 }
+    },
+    {
+      "name": "🎥 Record: from the main menu",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "powershell.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\record.ps1"],
+      "console": "externalTerminal",
+      "presentation": { "group": "7 Record", "order": 3 }
+    },
+    {
+      "name": "🔨🎥 Build + Record: Mission 5 Atreides",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "preLaunchTask": "UCRT64 Build",
+      "cwd": "${workspaceFolder}",
+      "program": "powershell.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\scripts\\record.ps1",
+               "--house", "atreides", "--mission", "5"],
+      "console": "externalTerminal",
+      "presentation": { "group": "7 Record", "order": 4 }
+    },
+
+    // Four ornithopters of yours near the construction yard, to play with.  They
+    // start on Patrol (slow circles over where they are, attacking what comes into
+    // the ring shown when one is selected); Hunt sends them after anything.  Their
+    // icons are in the bottom left corner: click one to select it and jump to it.
+    {
+      "name": "🚁 Show: ornithopters (--spawn-ornithopters 4)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "5", "--spawn-ornithopters", "4"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "6 Show me", "order": 9 }
+    },
+    {
+      "name": "🔨🚁 Build + Show: ornithopters (--spawn-ornithopters 4)",
+      "type": "cppdbg",
+      "request": "launch",
+      "preLaunchTask": "UCRT64 Build",
+      "program": "D:/development/dunedynasty/dist/dunedynasty.exe",
+      "args": ["--windowed", "--house", "atreides", "--mission", "5", "--spawn-ornithopters", "4"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "D:/development/msys64/mingw64/bin/gdb.exe",
+      "setupCommands": [
+        { "description": "xx", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "presentation": { "group": "6 Show me", "order": 10 }
+    },
     {
       "name": "🐛 Show: sandworm behaviour (--test-worm)",
       "type": "cppdbg",

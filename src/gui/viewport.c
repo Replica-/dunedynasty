@@ -8,6 +8,8 @@
 #include "../common_a5.h"
 #include "../enhancement.h"
 #include "../explosion.h"
+#include "../airwing.h"
+#include "../fog.h"
 #include "../map.h"
 #include "../newui/viewport.h"
 #include "../opendune.h"
@@ -22,6 +24,7 @@
 #include "../tools/coord.h"
 #include "../unit.h"
 #include "../video/video.h"
+#include "../video/video_a5.h"
 
 #if 0
 extern bool GUI_Widget_Viewport_Click(Widget *w);
@@ -34,7 +37,10 @@ void GUI_Widget_Viewport_Draw(void)
 	const uint16 oldValue_07AE_0000 = Widget_SetCurrentWidget(2);
 	PoolFindStruct find;
 
+	Fog_DrawBackground();
 	Viewport_DrawTiles();
+	Fog_Draw();
+	Airwing_DrawPatrolAreas();
 	DayNight_DrawShadows();
 
 	for (const Unit *u = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_SANDWORM);
@@ -58,6 +64,10 @@ void GUI_Widget_Viewport_Draw(void)
 			u = Unit_FindNext(&find)) {
 
 		if (u->o.index < 19 || u->o.index > UnitPool_GetMaxIndex() -1 )
+			continue;
+
+		/* The hardware effects draw the worm themselves. */
+		if (u->o.type == UNIT_SANDWORM && VideoA5_HardwareEffectsActive())
 			continue;
 
 		if (enhancement_invisible_saboteurs && u->o.type == UNIT_SABOTEUR)

@@ -18,6 +18,7 @@
 #include "daynight.h"
 
 #include "enhancement.h"
+#include "fog.h"
 #include "explosion.h"
 #include "gui/widget.h"
 #include "house.h"
@@ -123,6 +124,15 @@ DayNight_Name(void)
 	if (d >= 0.97f) return "Day";
 	if (d <= 0.03f) return "Night";
 	return (p > 0.3f && p < PHASE_DAWN_BEGIN) ? "Dusk" : "Dawn";
+}
+
+float
+DayNight_VisionScale(void)
+{
+	if (!g_day_night)
+		return 1.0f;
+
+	return 0.6f + (4.0f / 3.0f - 0.6f) * DayNight_Daylight();
 }
 
 int
@@ -444,6 +454,35 @@ DN_SoftLight(int cx, int cy, float radius, float amount, float darkness)
 	}
 }
 
+/* A cone of light: a slice of a circle from the lamp, with half the angle spread to each side
+ * of the direction dx,dy.  Like the soft lights, it is many slices, each a little smaller than
+ * the last, so it is brightest along the middle and near the lamp and fades towards the sides
+ * and the far end.
+ */
+static void
+DN_Cone(float cx, float cy, float dx, float dy, float length, float halfAngle, float amount, float darkness)
+{
+	enum { RINGS = 12, STEPS = 8 };
+	const float each = darkness * amount / RINGS;
+	const float base = atan2f(dy, dx);
+
+	for (int i = 0; i < RINGS; i++) {
+		const float k = 1.0f - 0.85f * (float)i / RINGS;
+		const float r = length * k;
+		const float spread = halfAngle * (0.35f + 0.65f * k);
+		float px = cx + cosf(base - spread) * r, py = cy + sinf(base - spread) * r;
+
+		for (int s = 1; s <= STEPS; s++) {
+			const float a = base - spread + 2.0f * spread * (float)s / STEPS;
+			const float qx = cx + cosf(a) * r, qy = cy + sinf(a) * r;
+
+			Prim_FillTriangle_RGBA(cx, cy, px, py, qx, qy, 0, 0, 0, (unsigned char)(each + 0.5f));
+			px = qx;
+			py = qy;
+		}
+	}
+}
+
 /* Units see three times as far as they used to, and the light is much stronger. */
 #define UNIT_LIGHT_RANGE 3.0f
 
@@ -456,25 +495,13 @@ DN_PaintLight(const Light *l, float darkness)
 
 	switch (l->kind) {
 		case LIGHT_HEADLIGHT:
-			/* Only the beam in front, widening and fading, with no circle round the vehicle. */
-
-			for (int k = 0; k < 6; k++) {
-				const float dist = (10.0f + 6.5f * k) * R;
-
-				DN_SoftLight(cx + (int)floorf(l->dx * dist + 0.5f), cy + (int)floorf(l->dy * dist + 0.5f),
-						(5.0f + 2.6f * k) * R, 0.50f, darkness);
-			}
+			/* A cone of light in front of the vehicle, with no circle round it. */
+			DN_Cone((float)cx, (float)cy, l->dx, l->dy, 31.0f * R, 0.42f, 0.85f, darkness);
 			break;
 
 		case LIGHT_FOOT:
-			/* Only the flashlight beam, no circle round the soldier. */
-
-			for (int k = 0; k < 4; k++) {
-				const float dist = (8.0f + 5.0f * k) * R;
-
-				DN_SoftLight(cx + (int)floorf(l->dx * dist + 0.5f), cy + (int)floorf(l->dy * dist + 0.5f),
-						(3.5f + 1.6f * k) * R, 0.55f, darkness);
-			}
+			/* A narrower cone, a flashlight. */
+			DN_Cone((float)cx, (float)cy, l->dx, l->dy, 17.0f * R, 0.30f, 0.80f, darkness);
 			break;
 
 		case LIGHT_FLYER:
@@ -537,7 +564,7 @@ DayNight_DrawDarkness(void)
 	/* Ground that is hidden is black, which would show up as black patches where
 	 * the lights are.  At night it is the colour of the dark instead.
 	 */
-	for (int ty = 0; ty < MAP_SIZE_MAX; ty++) {
+	for (int ty = 0; ty < MAP_SIZE_MAX && !Fog_Active(); ty++) {   /* The hardware fog is the colour of the dark already. */
 		for (int tx = 0; tx < MAP_SIZE_MAX; tx++) {
 			const tile32 corner = { (uint16)(tx * 256), (uint16)(ty * 256) };
 			int x, y;

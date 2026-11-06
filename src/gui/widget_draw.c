@@ -515,7 +515,24 @@ void GUI_Widget_ActionPanel_Draw(bool forceDraw)
 					if (isNotPlayerOwned && o->type != UNIT_HARVESTER) actions = g_table_actionsAI;
 
 					for (int i = 0; i < 4; i++) {
+						/* An action listed twice (the ornithopter has only two) gets one button. */
+						bool repeated = false;
+
+						for (int j = 0; j < i; j++) {
+							if (actions[j] == actions[i])
+								repeated = true;
+						}
+
+						if (repeated) {
+							GUI_Widget_MakeInvisible(buttons[i]);
+							continue;
+						}
+
 						buttons[i]->stringID = g_table_actionInfo[actions[i]].stringID;
+
+						/* An ornithopter on area guard circles over it: a patrol. */
+						if (o->type == UNIT_ORNITHOPTER && actions[i] == ACTION_AREA_GUARD)
+							buttons[i]->stringID = STR_PATROL;
 						GUI_Widget_SetShortcuts(buttons[i]);
 						GUI_Widget_MakeVisible(buttons[i]);
 

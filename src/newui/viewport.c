@@ -12,6 +12,8 @@
 #include "../common_a5.h"
 #include "../config.h"
 #include "../enhancement.h"
+#include "../airwing.h"
+#include "../fog.h"
 #include "../gfx.h"
 #include "../gui/gui.h"
 #include "../house.h"
@@ -37,6 +39,9 @@
 #include "../tools/orientation.h"
 #include "../tools/random_xorshift.h"
 #include "../unit.h"
+#include "../tithe.h"
+#include "../sandworm_fx.h"
+#include "../video/video_a5.h"
 #include "../video/video.h"
 
 enum ViewportClickAction {
@@ -159,6 +164,25 @@ Viewport_SelectRegion(void)
 
 		const uint16 packed = Tile_PackXY(tilex, tiley);
 
+		/* An ornithopter is in the air, not on a tile: look for one under the mouse first. */
+		Unit *air = Airwing_UnitAtViewport(selection_box_x2, selection_box_y2);
+
+		if (air != NULL) {
+			if (selection_box_ctrl_pressed || double_click_performed) {
+				Unit_SelectType(air->o.type);
+			} else if (Unit_IsSelected(air)) {
+				Unit_Unselect(air);
+			} else {
+				if (!selection_box_add_to_selection) {
+					Map_SetSelection(0xFFFF);
+					Unit_UnselectAll();
+				}
+				Unit_Select(air);
+				Unit_DisplayStatusText(air);
+			}
+			return;
+		}
+
 		if (g_mapVisible[packed].fogOverlayBits == 0xF)
 			return;
 
@@ -259,7 +283,7 @@ Viewport_Target(Unit *u, enum UnitActionType action, uint16 packed)
 	if (action == ACTION_INVALID)
 		return;
 
-	if (action != ACTION_MOVE && action != ACTION_HARVEST) {
+	if (action != ACTION_MOVE && action != ACTION_HARVEST && !Airwing_ActionNeedsTarget(u, action)) {
 		encoded = Tools_Index_Encode(Unit_FindTargetAround(packed), IT_TILE);
 	} else {
 		encoded = Tools_Index_Encode(packed, IT_TILE);
@@ -513,6 +537,9 @@ Viewport_PerformContextSensitiveAction(uint16 packed, bool dry_run)
 				action = ACTION_ATTACK;
 			} else if (oi->actionsPlayer[i] == ACTION_MOVE) {
 				action = ACTION_MOVE;
+			} else if (Airwing_ActionNeedsTarget(u, oi->actionsPlayer[i])) {
+				/* An ornithopter told to go somewhere patrols there. */
+				action = ACTION_AREA_GUARD;
 			} else if ((oi->actionsPlayer[i] == ACTION_HARVEST) && scouted
 					&& (lst == LST_SPICE || lst == LST_THICK_SPICE)) {
 				/* Harvesters should only harvest if ordered to a spice field. */
@@ -599,6 +626,11 @@ Viewport_Click(Widget *w)
 		l_tickCursor = g_timerGame;
 		Video_SetCursor(cursorID);
 	}
+
+	/* The ornithopter and idle harvester icons in the bottom left corner. */
+	if ((w->state.buttonState & 0x01) && w->index == 43 && g_selectionType != SELECTIONTYPE_TARGET
+			&& Airwing_Click(g_mouseX, g_mouseY, Input_Test(SCANCODE_LSHIFT)))
+		return true;
 
 	if (w->state.buttonState & 0x01) {
 		const bool mouse_in_scroll_widget = Viewport_MouseInScrollWidget();
@@ -1069,6 +1101,8 @@ Viewport_DrawTilesInRange(int x0, int y0,
 		bool draw_tile, bool draw_fog)
 {
 	const MapInfo *mapInfo = &g_mapInfos[g_scenario.mapScale];
+	/* The graphics card draws the fog, in one smooth layer, so no sprites for it. */
+	const bool hardware_fog = Fog_Active();
 	int left, top;
 	int x, y;
 
@@ -1093,30 +1127,39 @@ Viewport_DrawTilesInRange(int x0, int y0,
 		const FogOfWarTile *f = &g_mapVisible[curPos];
 
 		for (left = viewportX1; left < viewportX2; left += TILE_SIZE, curPos++, t++, f++) {
-			if (draw_tile && (f->fogSpriteID != g_veiledSpriteID - 1) && (f->fogSpriteID != g_veiledSpriteID)) {
-				if (Viewport_TileIsDebris(f->groundSpriteID)) {
+			/* Ground that has not been seen is drawn too when the graphics card draws the fog, as it is
+			 * the fog that hides it, so there are no tile edges to show.
+			 */
+			const bool veiled = (f->fogSpriteID == g_veiledSpriteID - 1) || (f->fogSpriteID == g_veiledSpriteID);
+
+			if (draw_tile && (!veiled || hardware_fog)) {
+				const uint16 groundID = veiled ? t->groundSpriteID : f->groundSpriteID;
+				const uint16 overlayID = veiled ? t->overlaySpriteID : f->overlaySpriteID;
+				const enum HouseType tileHouse = veiled ? t->houseID : f->houseID;
+
+				if (Viewport_TileIsDebris(groundID)) {
 					const uint16 iconID = g_mapSpriteID[curPos] & ~0x8000;
 
 					Video_DrawIcon(iconID, HOUSE_HARKONNEN, left, top);
 				}
 
-				if (f->groundSpriteID)
-					Video_DrawIcon(f->groundSpriteID, f->houseID, left, top);
+				if (groundID)
+					Video_DrawIcon(groundID, tileHouse, left, top);
 
-				if (f->overlaySpriteID != 0)
-					Video_DrawIcon(f->overlaySpriteID, f->houseID, left, top);
+				if (overlayID != 0)
+					Video_DrawIcon(overlayID, tileHouse, left, top);
 
 				/* Draw the transparent fog UNDER units, which doesn't
 				 * really conceal units anyway.  This prevents it from
 				 * darkening the blur effect's rendering again.
 				 */
-				if (enhancement_fog_of_war && f->fogOverlayBits) {
+				if (enhancement_fog_of_war && f->fogOverlayBits && !hardware_fog) {
 					uint16 iconID = g_veiledSpriteID - 16 + f->fogOverlayBits;
 					Video_DrawIconAlpha(iconID, left, top, 0x80);
 				}
 			}
 
-			if (draw_fog && (f->fogSpriteID != 0)) {
+			if (draw_fog && !hardware_fog && (f->fogSpriteID != 0)) {
 				const uint16 iconID
 					= (f->fogSpriteID == g_veiledSpriteID)
 					? (g_veiledSpriteID - 1) : f->fogSpriteID;
@@ -1157,7 +1200,7 @@ Viewport_DrawTiles(void)
 void
 Viewport_DrawTileFog(void)
 {
-	if (!enhancement_fog_covers_units)
+	if (!enhancement_fog_covers_units || Fog_Active())
 		return;
 
 	const WidgetInfo *wi = &g_table_gameWidgetInfo[GAME_WIDGET_VIEWPORT];
@@ -1506,6 +1549,19 @@ Viewport_DrawSandworm(const Unit *u)
 	if (g_mapVisible[Tile_PackTile(u->o.position)].fogOverlayBits == 0xF)
 		return;
 
+	/* The hardware effects draw it as a mound shaking under the sand, with a furrow behind it. */
+	if (VideoA5_HardwareEffectsActive()) {
+		SandwormFx_Draw(u);
+
+		if (Unit_IsSelected(u)) {
+			int sx, sy;
+
+			if (Map_IsPositionInViewport(u->o.position, &sx, &sy))
+				Viewport_DrawSelectedUnit(sx, sy);
+		}
+		return;
+	}
+
 	const enum ShapeID shapeID = g_table_unitInfo[UNIT_SANDWORM].groundSpriteID;
 	int x, y;
 
@@ -1677,7 +1733,7 @@ Viewport_DrawUnit(const Unit *u, int windowX, int windowY, bool render_for_blur_
 			Viewport_DrawUnitHarvesting(u, orientation, x, y);
 	}
 
-	if (u->spriteOffset >= 0 && ui->turretSpriteID != 0xFFFF) {
+	if (u->spriteOffset >= 0 && ui->turretSpriteID != 0xFFFF && !Tithe_IsCollectorTank(u)) {
 		Viewport_DrawUnitTurret(u, ui, x, y);
 	}
 

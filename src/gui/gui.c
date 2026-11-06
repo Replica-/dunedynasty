@@ -39,6 +39,7 @@
 #include "../newui/halloffame.h"
 #include "../newui/menu.h"
 #include "../newui/menubar.h"
+#include "../msglog.h"
 #include "../newui/savemenu.h"
 #include "../newui/viewport.h"
 #include "../opendune.h"
@@ -141,6 +142,9 @@ void GUI_DisplayText(const char *str, int16 importance, ...)
 		vsnprintf(buffer, sizeof(buffer), str, ap);
 		va_end(ap);
 	}
+
+	if (str != NULL && importance >= 0)
+		MsgLog_Add(buffer);
 
 	if (importance == -1) { /* Remove all displayed lines. */
 		line1Importance = -1;
@@ -1680,6 +1684,7 @@ GUI_String_Get_ByIndex(int16 stringID)
 		case -59: onoff = g_radio_voices; break;
 		case -76: onoff = g_day_night; break;
 		case -77: onoff = g_sandstorms; break;
+		case -78: onoff = g_floating_log; break;
 
 		case -70:
 			if (enhancement_draw_health_bars == HEALTH_BAR_ALL_UNITS)

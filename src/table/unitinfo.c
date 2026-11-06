@@ -105,7 +105,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* conquerable          */ false,
 		/* canBePickedUp        */ false,
 		/* noMessageOnDeath     */ false,
-		/* tabSelectable        */ false,
+		/* tabSelectable        */ true,  /* Replica: ornithopters can be box-selected. */
 		/* scriptNoSlowdown     */ true,
 		/* targetAir            */ false,
 		/* priority             */ true
@@ -120,7 +120,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* structuresRequired   */ FLAG_STRUCTURE_HOUSE_OF_IX,
 		/* sortPriority         */ 28,
 		/* upgradeLevelRequired */ { 1, 1, 1, 1, 1, 1 },
-		/* actionsPlayer        */ { ACTION_STOP, ACTION_STOP, ACTION_STOP, ACTION_STOP },
+		/* actionsPlayer        */ { ACTION_ATTACK, ACTION_HUNT, ACTION_AREA_GUARD, ACTION_AREA_GUARD }, /* Replica: attack, hunt, or patrol (area guard, the default); see airwing.c. */
 		/* available            */ 0,
 		/* hintStringID         */ STR_NULL,
 		/* priorityBuild        */ 75,
@@ -147,7 +147,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* dimension            */ 24,
 		/* movementType         */ MOVEMENT_WINGER,
 		/* animationSpeed       */ 7,
-		/* movingSpeedFactor    */ 150,
+		/* movingSpeedFactor    */ 115, /* Replica: slower (original 150), so they can be shot down. */
 		/* turningSpeed         */ 2,
 		/* groundSpriteID       */ 289,
 		/* turretSpriteID       */ -1,
@@ -156,7 +156,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* destroyedSpriteID    */ 0,
 		/* fireDelay            */ 50,
 		/* fireDistance         */ 50,
-		/* damage               */ 50,
+		/* damage               */ 36, /* Replica: weaker (original 50). */
 		/* explosionType        */ EXPLOSION_IMPACT_SMALL,
 		/* bulletType           */ UNIT_MISSILE_TROOPER,
 		/* bulletSound          */ SOUND_ROCKET,
@@ -1924,7 +1924,7 @@ const UnitInfo g_table_unitInfo_original[UNIT_MAX] = {
 		/* dimension            */ 24,
 		/* movementType         */ MOVEMENT_SLITHER,
 		/* animationSpeed       */ 0,
-		/* movingSpeedFactor    */ 5, /* Replica: slower (original 6). */
+		/* movingSpeedFactor    */ 7, /* Replica: faster (original 6); much faster again when hunting harvesters, see Unit_SetSpeed(). */
 		/* turningSpeed         */ 2,
 		/* groundSpriteID       */ 161,
 		/* turretSpriteID       */ -1,

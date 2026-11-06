@@ -558,11 +558,25 @@ VideoA5_Init(void)
 	if (g_headless)
 		display_flags |= ALLEGRO_FRAMELESS;
 
+#ifdef _WIN32
+	/* Headless: whatever the user is doing keeps the focus (see below). */
+	HWND foreground = g_headless ? GetForegroundWindow() : NULL;
+
+	/* And while the window is made, nothing may take the foreground at all. */
+	if (g_headless)
+		LockSetForegroundWindow(LSFW_LOCK);
+#endif
+
 	al_set_new_display_flags(display_flags);
 	al_set_new_display_option(ALLEGRO_VSYNC, 1, ALLEGRO_SUGGEST);
 	al_set_new_display_option(ALLEGRO_STENCIL_SIZE, 8, ALLEGRO_SUGGEST);
 	display = al_create_display(TRUE_DISPLAY_WIDTH, TRUE_DISPLAY_HEIGHT);
 	if (display == NULL) {
+#ifdef _WIN32
+		if (g_headless)
+			LockSetForegroundWindow(LSFW_UNLOCK);
+#endif
+
 		Error("al_create_display() failed.\n"
 				"  Tried %s%dx%d.\n"
 				"  Maybe try some different options?\n",
@@ -576,6 +590,14 @@ VideoA5_Init(void)
 	if (g_headless) {
 #ifdef _WIN32
 		ShowWindow(al_get_win_window_handle(display), SW_HIDE);
+
+		/* Making the window took the focus from whatever had it (a game, the
+		 * editor).  Give it straight back: this process still may, having just
+		 * been given the foreground.
+		 */
+		LockSetForegroundWindow(LSFW_UNLOCK);
+		if (foreground != NULL && IsWindow(foreground))
+			SetForegroundWindow(foreground);
 #else
 		al_set_window_position(display, -32000, -32000);
 #endif

@@ -9,6 +9,7 @@
 #include "os/math.h"
 
 #include "map.h"
+#include "fog.h"
 
 #include "ai.h"
 #include "animation.h"
@@ -1397,6 +1398,7 @@ void
 Map_ResetFogOfWar(void)
 {
 	memset(g_mapVisible, 0, sizeof(g_mapVisible));
+	Fog_Reset();
 
 	for (uint16 packed = 0; packed < MAP_SIZE_MAX * MAP_SIZE_MAX; packed++) {
 		FogOfWarTile *f = &g_mapVisible[packed];
@@ -1409,6 +1411,12 @@ Map_ResetFogOfWar(void)
 void
 Map_Client_UpdateFogOfWar(void)
 {
+	/* The graphics card draws the fog, and lets it creep in and out. */
+	if (Fog_Active()) {
+		Fog_Update();
+		return;
+	}
+
 	if (enhancement_fog_of_war) {
 		for (uint16 packed = 65; packed < MAP_SIZE_MAX * MAP_SIZE_MAX - 65; packed++) {
 			FogOfWarTile *f = &g_mapVisible[packed];

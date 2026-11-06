@@ -180,6 +180,9 @@ extern void Unit_UntargetEncodedIndex(uint16 encoded);
 extern void Unit_UntargetMe(Unit *unit);
 extern void Unit_SetOrientation(Unit *unit, int8 orientation, bool rotateInstantly, uint16 level);
 extern void Unit_Select(Unit *unit);
+extern void Unit_NoteHit(const Unit *u);
+extern void Unit_NoteFired(const Unit *u);
+extern bool Unit_IsEngaged(const Unit *u);   /* Hit or firing a moment ago. */
 extern Unit *Unit_CreateWrapper(uint8 houseID, enum UnitType type, uint16 location);
 extern uint16 Unit_FindTargetAround(uint16 packed);
 extern bool Unit_IsTileOccupied(Unit *unit);
