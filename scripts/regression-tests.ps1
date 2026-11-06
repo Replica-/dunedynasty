@@ -62,6 +62,10 @@ $tests = @(
 	   d = "worm behaviours next to stationary and moving tanks" },
 	@{ n = "worm-harvesters";  t = 240; k = "";     a = $mission + "--test-worm-harvesters";
 	   d = "the game's own worm logic against harvesters" },
+	@{ n = "ornithopters";     t = 180; k = "";     a = $mission + "--test-ornithopters";
+	   d = "ornithopters: patrol by default, circling slowly near the post; hunt; click to select" },
+	@{ n = "air-defence";      t = 120; k = "";     a = $mission + "--test-air-defence";
+	   d = "enemy troopers turn on ornithopters in range; their rockets lead the target and go off close" },
 	@{ n = "worm-respawn";     t = 240; k = "";     a = $mission + "--test-worm-respawn";
 	   d = "worms coming back after being killed" },
 	@{ n = "spice";            t = 600; k = "";     a = $mission + "--test-spice"; slow = $true;

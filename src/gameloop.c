@@ -17,6 +17,7 @@
 #include "enhancement.h"
 #include "explosion.h"
 #include "sandstorm.h"
+#include "tithe.h"
 #include "daynight.h"
 #include "gui/gui.h"
 #include "house.h"
@@ -28,6 +29,8 @@
 #include "net/server.h"
 #include "newui/actionpanel.h"
 #include "newui/chatbox.h"
+#include "airwing.h"
+#include "msglog.h"
 #include "newui/editbox.h"
 #include "newui/menubar.h"
 #include "newui/viewport.h"
@@ -105,6 +108,8 @@ GameLoop_Server_Logic(void)
 	Explosion_Tick();
 	Sandstorm_Tick();
 	DayNight_Tick();
+	Tithe_Tick();
+	Airwing_Tick();
 	Animation_Tick();
 	Unit_Sort();
 }
@@ -413,17 +418,23 @@ GameLoop_Client_Draw(void)
 	if (g_gameOverlay == GAMEOVERLAY_NONE) {
 		GUI_DrawInterfaceAndRadar();
 		ChatBox_DrawInGame(g_chat_buf);
+		MsgLog_Draw();
+		Airwing_DrawIcons();
 	} else if (g_gameOverlay == GAMEOVERLAY_HINT
 	        || g_gameOverlay == GAMEOVERLAY_WIN
 	        || g_gameOverlay == GAMEOVERLAY_LOSE) {
 		GUI_DrawInterfaceAndRadar();
 		ChatBox_DrawInGame(g_chat_buf);
+		MsgLog_Draw();
+		Airwing_DrawIcons();
 		MenuBar_DrawInGameOverlay();
 	} else if (g_gameOverlay == GAMEOVERLAY_MENTAT) {
 		MenuBar_DrawMentatOverlay();
 	} else {
 		GUI_DrawInterfaceAndRadar();
 		ChatBox_DrawInGame(g_chat_buf);
+		MsgLog_Draw();
+		Airwing_DrawIcons();
 		MenuBar_DrawOptionsOverlay();
 	}
 

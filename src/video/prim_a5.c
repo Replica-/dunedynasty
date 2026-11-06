@@ -430,3 +430,58 @@ Prim_GrabEnd(void)
 		s_grabBitmap = NULL;
 	}
 }
+
+/*--------------------------------------------------------------*/
+
+/* A grid of cols x rows cells, each cell x cell pixels, with the top left at x,y.  The
+ * alpha is given at the corners, (cols + 1) x (rows + 1) of them, and the graphics card
+ * blends it smoothly across each cell.  Everything is kept inside the box bx1,by1,bx2,by2.
+ */
+void
+Prim_AlphaGrid(int cols, int rows, const float *cornerAlpha, float x, float y, float cell,
+		unsigned char r, unsigned char g, unsigned char b,
+		float bx1, float by1, float bx2, float by2)
+{
+	enum { MAX_COLS = 160, MAX_ROWS = 100 };
+	static ALLEGRO_VERTEX vertices[(MAX_COLS + 1) * (MAX_ROWS + 1)];
+	static int indices[MAX_COLS * MAX_ROWS * 6];
+	int num = 0;
+
+	if (cols > MAX_COLS || rows > MAX_ROWS)
+		return;
+
+	for (int j = 0; j <= rows; j++) {
+		for (int i = 0; i <= cols; i++) {
+			ALLEGRO_VERTEX *v = &vertices[j * (cols + 1) + i];
+			const float px = x + i * cell, py = y + j * cell;
+
+			v->x = (px < bx1) ? bx1 : (px > bx2) ? bx2 : px;
+			v->y = (py < by1) ? by1 : (py > by2) ? by2 : py;
+			v->z = 0.0f;
+			v->u = v->v = 0.0f;
+			v->color = al_map_rgba(r, g, b, (unsigned char)(cornerAlpha[j * (cols + 1) + i] * 255.0f + 0.5f));
+		}
+	}
+
+	for (int j = 0; j < rows; j++) {
+		for (int i = 0; i < cols; i++) {
+			const int a = j * (cols + 1) + i, bb = a + 1, c = a + (cols + 1), d = c + 1;
+
+			if (cornerAlpha[a] <= 0.0f && cornerAlpha[bb] <= 0.0f && cornerAlpha[c] <= 0.0f && cornerAlpha[d] <= 0.0f)
+				continue;
+
+			indices[num++] = a; indices[num++] = bb; indices[num++] = c;
+			indices[num++] = bb; indices[num++] = d; indices[num++] = c;
+		}
+	}
+
+	if (num > 0)
+		al_draw_indexed_prim(vertices, NULL, NULL, indices, num, ALLEGRO_PRIM_TRIANGLE_LIST);
+}
+
+void
+Prim_FillTriangle_RGBA(float x1, float y1, float x2, float y2, float x3, float y3,
+		unsigned char r, unsigned char g, unsigned char b, unsigned char alpha)
+{
+	al_draw_filled_triangle(x1, y1, x2, y2, x3, y3, al_map_rgba(r, g, b, alpha));
+}

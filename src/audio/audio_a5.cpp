@@ -6,6 +6,9 @@
 #include <allegro5/allegro_memfile.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
 #include "buildcfg.h"
 
 #include "audio_a5.h"
@@ -89,6 +92,125 @@ static void AudioA5_InitAdlibEffects(void);
 static void AudioA5_FreeMusicStream(void);
 static void AudioA5_UnloadRadioVoices(void);
 static void AudioA5_UnloadWind(void);
+
+/*--------------------------------------------------------------*/
+/* --record-audio: the game's own sound, as it is mixed, to a WAV file.  Only the
+ * game is in it, not the rest of the computer.  Next to it, <file>.start has the
+ * time the first sample was mixed (milliseconds since 1970), so that it can be
+ * lined up with a video of the window.
+ */
+
+const char *g_recordAudioPath = NULL;
+
+static FILE *s_record;
+static uint32_t s_recordFrames;
+static uint32_t s_recordSinceHeader;
+
+static void
+AudioA5_WriteWavHeader(FILE *f, uint32_t frames)
+{
+	const uint32_t dataBytes = frames * 4;
+	unsigned char h[44];
+	const uint32_t riff = 36 + dataBytes, fmtLen = 16, rate = SRATE, byteRate = SRATE * 4;
+	const uint16_t pcm = 1, channels = 2, align = 4, bits = 16;
+
+	memcpy(h + 0, "RIFF", 4);  memcpy(h + 4, &riff, 4);
+	memcpy(h + 8, "WAVE", 4);  memcpy(h + 12, "fmt ", 4);
+	memcpy(h + 16, &fmtLen, 4); memcpy(h + 20, &pcm, 2);
+	memcpy(h + 22, &channels, 2); memcpy(h + 24, &rate, 4);
+	memcpy(h + 28, &byteRate, 4); memcpy(h + 32, &align, 2);
+	memcpy(h + 34, &bits, 2);  memcpy(h + 36, "data", 4);
+	memcpy(h + 40, &dataBytes, 4);
+
+	fseek(f, 0, SEEK_SET);
+	fwrite(h, 1, sizeof(h), f);
+	fseek(f, 0, SEEK_END);
+}
+
+static void
+AudioA5_RecordCallback(void *buf, unsigned int samples, void *data)
+{
+	(void)data;
+
+	if (s_record == NULL)
+		return;
+
+	if (s_recordFrames == 0) {
+		char path[1024];
+		struct timespec ts;
+
+		timespec_get(&ts, TIME_UTC);
+		snprintf(path, sizeof(path), "%s.start", g_recordAudioPath);
+
+		FILE *f = fopen(path, "w");
+
+		if (f != NULL) {
+			fprintf(f, "%lld\n", (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+			fclose(f);
+		}
+	}
+
+	const float *in = (const float *)buf;
+	int16_t out[2 * 512];
+
+	for (unsigned int done = 0; done < samples; ) {
+		const unsigned int n = (samples - done > 512) ? 512 : samples - done;
+
+		for (unsigned int i = 0; i < 2 * n; i++) {
+			float v = in[2 * done + i] * 32767.0f;
+
+			out[i] = (int16_t)((v > 32767.0f) ? 32767 : (v < -32768.0f) ? -32768 : v);
+		}
+
+		fwrite(out, sizeof(out[0]), 2 * n, s_record);
+		done += n;
+	}
+
+	s_recordFrames += samples;
+	s_recordSinceHeader += samples;
+
+	/* Keep the header right as it goes, so the file is good even if the game is killed. */
+	if (s_recordSinceHeader >= (uint32_t)SRATE) {
+		s_recordSinceHeader = 0;
+		AudioA5_WriteWavHeader(s_record, s_recordFrames);
+		fflush(s_record);
+	}
+}
+
+static void
+AudioA5_StopRecording(void)
+{
+	if (s_record == NULL)
+		return;
+
+	if (al_mixer != NULL)
+		al_set_mixer_postprocess_callback(al_mixer, NULL, NULL);
+
+	FILE *f = s_record;
+
+	s_record = NULL;
+	AudioA5_WriteWavHeader(f, s_recordFrames);
+	fclose(f);
+}
+
+static void
+AudioA5_StartRecording(void)
+{
+	if (g_recordAudioPath == NULL || al_mixer == NULL)
+		return;
+
+	s_record = fopen(g_recordAudioPath, "wb");
+	if (s_record == NULL) {
+		Warning("Cannot record the audio to %s.\n", g_recordAudioPath);
+		return;
+	}
+
+	s_recordFrames = 0;
+	s_recordSinceHeader = 0;
+	AudioA5_WriteWavHeader(s_record, 0);
+	al_set_mixer_postprocess_callback(al_mixer, AudioA5_RecordCallback, NULL);
+	atexit(AudioA5_StopRecording);
+}
 
 /*--------------------------------------------------------------*/
 
@@ -176,6 +298,7 @@ AudioA5_Init(void)
 	}
 
 	al_attach_mixer_to_voice(al_mixer, al_voice);
+	AudioA5_StartRecording();
 
 	/* Headless: the audio system runs like normal, so that the tests cover it, but
 	 * the mixer is turned right down and nothing is heard.
@@ -236,6 +359,8 @@ audio_init_failed:
 void
 AudioA5_Uninit(void)
 {
+	AudioA5_StopRecording();
+
 	for (int sampleID = 0; sampleID < SAMPLEID_MAX; sampleID++) {
 		al_destroy_sample(s_sample[sampleID]);
 		s_sample[sampleID] = NULL;
@@ -820,7 +945,7 @@ AudioA5_PollNarrator(void)
 /*--------------------------------------------------------------*/
 
 /* Radio voices: extra spoken lines for selecting and ordering units, loaded
- * from <data dir>/radio/<voice name>/{sel,ack}_*.wav.  Each voice is a
+ * from <data dir>/radio/<voice name>/{sel,ack,bsy}_*.wav.  Each voice is a
  * character, and each unit keeps the same one.
  */
 
@@ -846,7 +971,7 @@ AudioA5_LoadRadioVoice(const char *dir)
 	}
 
 	const int voice = s_radio_voices;
-	static const char *prefix[RADIO_NUM_KINDS] = { "sel_", "ack_" };
+	static const char *prefix[RADIO_NUM_KINDS] = { "sel_", "ack_", "bsy_" };
 
 	for (ALLEGRO_FS_ENTRY *e = al_read_directory(d); e != NULL; e = al_read_directory(d)) {
 		const char *path = al_get_fs_entry_name(e);
@@ -871,8 +996,8 @@ AudioA5_LoadRadioVoice(const char *dir)
 	al_destroy_fs_entry(d);
 
 	if (s_radio_lines[voice][RADIO_SELECT] > 0 || s_radio_lines[voice][RADIO_ACKNOWLEDGE] > 0) {
-		s_radio_last[voice][RADIO_SELECT] = -1;
-		s_radio_last[voice][RADIO_ACKNOWLEDGE] = -1;
+		for (int kind = 0; kind < RADIO_NUM_KINDS; kind++)
+			s_radio_last[voice][kind] = -1;
 		s_radio_voices++;
 	}
 }

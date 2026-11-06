@@ -657,6 +657,11 @@ uint16 Script_Unit_Fire(ScriptEngine *script)
 
 	if ((u->o.type == UNIT_TROOPERS || u->o.type == UNIT_TROOPER) && (int16)distance > 512) typeID = UNIT_MISSILE_TROOPER;
 
+	/* Replica: troopers always use their rockets on aircraft; the rockets steer. */
+	if ((u->o.type == UNIT_TROOPERS || u->o.type == UNIT_TROOPER)
+			&& Tools_Index_GetType(target) == IT_UNIT
+			&& g_table_unitInfo[Tools_Index_GetUnit(target)->o.type].movementType == MOVEMENT_WINGER) typeID = UNIT_MISSILE_TROOPER;
+
 	if (enhancement_infantry_mini_rockets &&
 			(u->o.type == UNIT_INFANTRY || u->o.type == UNIT_SOLDIER) && (int16)distance > 512) typeID = UNIT_MISSILE_TROOPER;
 
@@ -747,6 +752,7 @@ uint16 Script_Unit_Fire(ScriptEngine *script)
 	if (u->o.type == UNIT_SANDWORM) u->fireDelay = 0;
 
 	Unit_UpdateMap(2, u);
+	Unit_NoteFired(u);
 
 	return 1;
 }

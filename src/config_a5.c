@@ -16,6 +16,8 @@
 #include "audio/audio.h"
 #include "daynight.h"
 #include "sandstorm.h"
+#include "msglog.h"
+#include "tithe.h"
 #include "enhancement.h"
 #include "file.h"
 #include "gfx.h"
@@ -147,6 +149,8 @@ static const GameOption s_game_option[] = {
 	{ "graphics",   "gl_post_fx",       CONFIG_BOOL,            .d._bool = &g_gl_post_fx },
 	{ "graphics",   "day_night",        CONFIG_BOOL,            .d._bool = &g_day_night },
 	{ "graphics",   "sandstorms",       CONFIG_BOOL,            .d._bool = &g_sandstorms },
+	{ "graphics",   "floating_message_log", CONFIG_BOOL,        .d._bool = &g_floating_log },
+	{ "graphics",   "sardaukar_tithe",  CONFIG_BOOL,            .d._bool = &g_tithe },
 	{ "graphics",   "hardware_effects", CONFIG_BOOL,            .d._bool = &g_hardware_effects },
 
 	{ "controls",   "auto_scroll",              CONFIG_BOOL,    .d._bool = &g_gameConfig.autoScroll },

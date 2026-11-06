@@ -11,6 +11,8 @@ extern "C" {
 extern void AudioA5_Init(void);
 extern void AudioA5_Uninit(void);
 
+extern const char *g_recordAudioPath;  /* From --record-audio FILE: the game's sound goes to a WAV file as well. */
+
 extern void AudioA5_InitInternalMusic(const MusicInfo *mid);
 extern void AudioA5_InitExternalMusic(const MusicInfo *ext);
 extern void AudioA5_SetMusicVolume(float volume);
@@ -27,6 +29,7 @@ extern bool AudioA5_PollNarrator(void);
 enum RadioKind {
 	RADIO_SELECT,
 	RADIO_ACKNOWLEDGE,
+	RADIO_BUSY,         /* Selected in the middle of a fight: "Under attack!" */
 	RADIO_NUM_KINDS
 };
 

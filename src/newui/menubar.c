@@ -21,6 +21,8 @@
 #include "../audio/audio.h"
 #include "../daynight.h"
 #include "../sandstorm.h"
+#include "../msglog.h"
+#include "../tithe.h"
 #include "../common_a5.h"
 #include "../config.h"
 #include "../enhancement.h"
@@ -134,22 +136,12 @@ MenuBar_DrawRadarAnimation(void)
 	return true;
 }
 
-/* Harvester and sandworm counters, next to the credits.  The harvester
- * count turns red above 3, the most a refinery set-up needs.
- */
+/* Tithe and sandworm counters, next to the credits. */
 static void
 MenuBar_DrawUnitCounters(const ScreenDiv *menubar)
 {
-	const int max_harvesters = 3;
 	PoolFindStruct find;
-	int harvesters = 0;
 	int sandworms = 0;
-
-	for (const Unit *u = Unit_FindFirst(&find, g_playerHouseID, UNIT_HARVESTER);
-			u != NULL;
-			u = Unit_FindNext(&find)) {
-		harvesters++;
-	}
 
 	for (const Unit *u = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_SANDWORM);
 			u != NULL;
@@ -171,18 +163,19 @@ MenuBar_DrawUnitCounters(const ScreenDiv *menubar)
 	}
 
 	const int x = menubar->width - 142;
-	const uint8 harvester_fg = (harvesters > max_harvesters) ? 6 : 29;
+	char tithe_text[48];
+	bool tithe_alert = false;
 
-	GUI_DrawText_Wrapper("Harvesters: %d", x, 5, harvester_fg, 0, 0x211, harvesters);
-	GUI_DrawText_Wrapper("Worm Threat: %s", x - 100, 5, threat_fg, 0, 0x211, threat);
+	/* The next Sardaukar pickup, where the harvester count used to be. */
+	if (Tithe_GetStatusText(tithe_text, sizeof(tithe_text), &tithe_alert))
+		GUI_DrawText_Wrapper("%s", x, 5, tithe_alert ? 6 : 29, 0, 0x211, tithe_text);
+	GUI_DrawText_Wrapper("Worm Threat: %s", x - 127, 5, threat_fg, 0, 0x211, threat);
 
-	/* The time of day: a sun or moon, a bar for the whole day with a marker, and its name. */
+	/* The time of day: a sun or moon, and a bar for the whole day with a marker. */
 	if (DayNight_Active()) {
 		const int ix = x - 100 - 180;
 
 		DayNight_DrawIndicator(ix, 4);
-		/* Text is positioned on a different scale from the pixels of the indicator. */
-		GUI_DrawText_Wrapper("%s", x - 208, 5, 29, 0, 0x211, DayNight_Name());
 	}
 }
 
@@ -203,14 +196,16 @@ MenuBar_Draw(enum HouseType houseID)
 		Video_DrawCPSSpecial(CPS_MENUBAR_MIDDLE, houseID, x, 0);
 	}
 
-	for (int x = menubar->width - 8 - 425; x + 425 - 1 >= 8; x -= 425) {
+	for (int x = menubar->width - 8 - 425; !g_floating_log && x + 425 - 1 >= 8; x -= 425) {
 		Video_DrawCPSSpecial(CPS_STATUSBAR_MIDDLE, houseID, x, 17);
 	}
 
 	Video_DrawCPSSpecial(CPS_MENUBAR_LEFT, houseID, 0, 0);
 	Video_DrawCPSSpecial(CPS_MENUBAR_RIGHT, houseID, menubar->width - 136, 0);
-	Video_DrawCPSSpecial(CPS_STATUSBAR_LEFT, houseID, 0, 17);
-	Video_DrawCPSSpecial(CPS_STATUSBAR_RIGHT, houseID, menubar->width - 8, 17);
+	if (!g_floating_log) {
+		Video_DrawCPSSpecial(CPS_STATUSBAR_LEFT, houseID, 0, 17);
+		Video_DrawCPSSpecial(CPS_STATUSBAR_RIGHT, houseID, menubar->width - 8, 17);
+	}
 	Shape_DrawRemap(SHAPE_CREDITS_LABEL, houseID, menubar->width - 128, 0, 0, 0);
 
 	/* Mentat. */
@@ -224,7 +219,10 @@ MenuBar_Draw(enum HouseType houseID)
 	Video_SetClippingArea(0, menubar->scaley * 4, TRUE_DISPLAY_WIDTH, menubar->scaley * 9);
 	GUI_DrawCredits(g_playerHouse->credits, (g_playerCredits == 0xFFFF) ? 2 : 1, ceil(TRUE_DISPLAY_WIDTH / menubar->scalex));
 	MenuBar_DrawUnitCounters(menubar);
-	GUI_DrawStatusBarText(statusbar->xBase, statusbar->yBase);
+	if (g_floating_log)
+		GUI_DisplayText(NULL, -1);   /* The messages float over the viewport instead. */
+	else
+		GUI_DrawStatusBarText(statusbar->xBase, statusbar->yBase);
 
 	Video_SetClippingArea(0, 0, TRUE_DISPLAY_WIDTH, TRUE_DISPLAY_HEIGHT);
 
@@ -621,7 +619,7 @@ MenuBar_ClickRadioButton(Widget *radio)
 		  -1
 		},
 		{ 26, 90, 91, 92, 93, 94, 95,
-		  66, 76, 67, 77,
+		  66, 76, 67, 77, 68, 78,
 		  -1
 		},
 	};
@@ -891,7 +889,7 @@ MenuBar_CreateGameControls(void)
 	 * 47, 57, 117  -- viewport scale label, slider.
 	 * 48, 58       -- hardware effects label, off/on.  Only with the OpenGL driver.
 	 * 49, 59       -- radio voices label, off/on.
-	 * 66, 76, 67, 77 -- day and night label, off/on; sandstorms label, off/on.
+	 * 66, 76, 67, 77, 68, 78 -- day and night label, off/on; sandstorms label, off/on; floating message log label, off/on.
 	 *
 	 * 60, 70   -- health bars label, off/on/always on.
 	 * 61, 71   -- hi-res overlays label, off/on.
@@ -944,6 +942,7 @@ MenuBar_CreateGameControls(void)
 		{ 49, VideoA5_HardwareEffectsAvailable() ? 4 : 3, "Radio voices" },
 		{ 66, 0, "Day and night" },
 		{ 67, 1, "Sandstorms" },
+		{ 68, 2, "Floating message log" },
 		{ 60, 0, "Health bars" },
 		{ 61, 1, "Hi-res overlays" },
 		{ 62, 2, "Smooth unit animation" },
@@ -982,6 +981,7 @@ MenuBar_CreateGameControls(void)
 		{ 59, VideoA5_HardwareEffectsAvailable() ? 4 : 3, 64 }, /* Radio voices. */
 		{ 76, 0,  64 }, /* Day and night. */
 		{ 77, 1,  64 }, /* Sandstorms. */
+		{ 78, 2,  64 }, /* Floating message log. */
 		{ 70, 0,  64 }, /* Health bars. */
 		{ 71, 1,  64 }, /* Hi-res vector graphics. */
 		{ 72, 2,  64 }, /* Smooth unit animation. */
@@ -1253,6 +1253,12 @@ MenuBar_TickGameControls(void)
 		case 0x8000 | 59: g_radio_voices = !g_radio_voices; break;
 		case 0x8000 | 76: g_day_night = !g_day_night; break;
 		case 0x8000 | 77: g_sandstorms = !g_sandstorms; break;
+
+		case 0x8000 | 78:
+			g_floating_log = !g_floating_log;
+			A5_InitTransform(false);
+			GameLoop_TweakWidgetDimensions();
+			break;
 
 		case 0x8000 | 70: /* Health bars. */
 			w = GUI_Widget_Get_ByIndex(g_widgetLinkedListTail, 70);

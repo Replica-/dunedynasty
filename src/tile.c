@@ -26,6 +26,13 @@ void
 Tile_RefreshFogInRadius(enum HouseFlag houses, enum TileUnveilCause cause,
 		tile32 tile, uint16 radius, bool unveil)
 {
+	/* Sight is a third better by day, and worse at night. */
+	if (radius > 0) {
+		radius = (uint16)(radius * DayNight_VisionScale() + 0.5f);
+		if (radius < 1)
+			radius = 1;
+	}
+
 	/* A night with a sandstorm: nobody sees further than a couple of tiles. */
 	const int limit = DayNight_VisionLimit();
 	if (limit > 0 && radius > limit)

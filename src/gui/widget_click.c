@@ -23,6 +23,7 @@
 #include "../shape.h"
 #include "../sprites.h"
 #include "../structure.h"
+#include "../airwing.h"
 #include "../unit.h"
 #include "../video/video.h"
 
@@ -91,8 +92,12 @@ bool GUI_Widget_TextButton_Click(Widget *w)
 	const UnitInfo *ui = &g_table_unitInfo[ref->o.type];
 	const enum UnitActionType refaction = ui->o.actionsPlayer[w->index - 8];
 
-	/* If action requires a target, switch to targetting mode. */
-	if (g_table_actionInfo[refaction].selectionType == SELECTIONTYPE_TARGET) {
+	/* If action requires a target, switch to targetting mode.  An ornithopter's
+	 * patrol takes the place to patrol.
+	 */
+	const bool patrol = Airwing_ActionNeedsTarget(ref, refaction);
+
+	if (g_table_actionInfo[refaction].selectionType == SELECTIONTYPE_TARGET || patrol) {
 		g_unitActive = ref;
 		g_activeAction = refaction;
 		GUI_ChangeSelectionType(SELECTIONTYPE_TARGET);
@@ -113,6 +118,10 @@ bool GUI_Widget_TextButton_Click(Widget *w)
 			= Unit_GetSimilarAction(ui->o.actionsPlayer, refaction);
 
 		if (actionID == ACTION_INVALID)
+			continue;
+
+		/* The patrol order is sent with its place, once it is chosen. */
+		if (patrol && Airwing_ActionNeedsTarget(u, actionID))
 			continue;
 
 		Client_Send_IssueUnitAction(actionID, 0, &u->o);

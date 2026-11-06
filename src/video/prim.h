@@ -22,9 +22,14 @@ extern void Prim_Rect_RGBA(float x1, float y1, float x2, float y2, unsigned char
 extern void Prim_FillRect(float x1, float y1, float x2, float y2, uint8 c);
 extern void Prim_FillRect_i(int x1, int y1, int x2, int y2, uint8 c);
 extern void Prim_FillRect_RGBA(float x1, float y1, float x2, float y2, unsigned char r, unsigned char g, unsigned char b, unsigned char alpha);
+extern void Prim_FillTriangle_RGBA(float x1, float y1, float x2, float y2, float x3, float y3, unsigned char r, unsigned char g, unsigned char b, unsigned char alpha);
 
 /* Additive blending (glowing fire) for the following primitives, or back to normal alpha blending. */
 extern void Prim_SetAdditive(bool additive);
+
+/* Smooth alpha over a grid of cells, set at the corners: see prim_a5.c. */
+extern void Prim_AlphaGrid(int cols, int rows, const float *cornerAlpha, float x, float y, float cell,
+		unsigned char r, unsigned char g, unsigned char b, float bx1, float by1, float bx2, float by2);
 
 enum PrimBlend {
 	PRIM_BLEND_NORMAL,

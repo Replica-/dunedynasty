@@ -29,6 +29,9 @@ extern int _al_mangled_main(int argc, char **argv);
 #include "audio/audio.h"
 #include "common_a5.h"
 #include "sandstorm.h"
+#include "airwing.h"
+#include "audio/audio_a5.h"
+#include "tithe.h"
 #include "daynight.h"
 #include "config.h"
 #include "crashlog/crashlog.h"
@@ -675,6 +678,21 @@ int main(int argc, char **argv)
 
 		if (strcmp(argv[i], "--test-sandstorm") == 0)
 			g_debugTestSandstorm = true;
+
+		if (strcmp(argv[i], "--record-audio") == 0 && i + 1 < argc)
+			g_recordAudioPath = argv[++i];
+
+		if (strcmp(argv[i], "--test-air-defence") == 0)
+			g_debugTestAirDefence = true;
+
+		if (strcmp(argv[i], "--test-ornithopters") == 0)
+			g_debugTestAirwing = true;
+
+		if (strcmp(argv[i], "--spawn-ornithopters") == 0 && i + 1 < argc)
+			g_debugSpawnOrnithopters = atoi(argv[++i]);
+
+		if (strcmp(argv[i], "--test-tithe") == 0)
+			g_debugTestTithe = true;
 
 		if (strcmp(argv[i], "--headless") == 0)
 			g_headless = true;

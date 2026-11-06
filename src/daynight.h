@@ -23,6 +23,11 @@ extern bool DayNight_IsNight(void);
  */
 extern int DayNight_VisionLimit(void);
 
+/* How far units and buildings see compared with the usual: a third further in daylight, shrinking
+ * through dusk to well under what they usually see at night.  1 when there is no day and night.
+ */
+extern float DayNight_VisionScale(void);
+
 extern void DayNight_Tick(void);                /* Server logic: night turns fog of war on. */
 extern void DayNight_RestoreFog(void);          /* Gives back the player's own fog of war setting. */
 
