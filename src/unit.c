@@ -52,7 +52,7 @@
 #include "tools/random_general.h"
 #include "airwing.h"
 #include "msglog.h"
-#include "msglog.h"
+#include "remains.h"
 #include "tithe.h"
 
 
@@ -373,7 +373,7 @@ static uint16 Unit_CountUnits(enum HouseType houseID, enum UnitType unit_type) {
  * target it is not next to, and hasn't moved for a while, the target is
  * ignored by that worm for a minute and it picks another one.
  */
-#define SANDWORM_STUCK_SECONDS 12
+#define SANDWORM_STUCK_SECONDS 6     /* No nearer its target in this long: it gives up on it. */
 #define SANDWORM_IGNORE_SECONDS 60
 
 typedef struct SandwormProgress {
@@ -381,6 +381,7 @@ typedef struct SandwormProgress {
 	int64_t since;          /* When it arrived there. */
 	uint16 ignoredTarget;   /* Encoded target given up on. */
 	int64_t ignoreUntil;
+	uint16 tracked;         /* The target the closest distance (packed) is for. */
 } SandwormProgress;
 
 static SandwormProgress s_wormProgress[UNIT_INDEX_MAX_RAISED];
@@ -401,29 +402,118 @@ Unit_Sandworm_IsIgnored(const Unit *worm, const Unit *target)
 		&& (p->ignoredTarget == Tools_Index_Encode(target->o.index, IT_UNIT));
 }
 
+/* Replica: the stretches of sand a worm can get across, so that worms only go
+ * for what they can reach.  Each tile a worm can move on is numbered by the
+ * stretch of sand it is in; rock, walls and buildings are 0.  Worked out again
+ * every so often, as buildings go up and come down.
+ */
+#define SANDWORM_REGION_SECONDS 10
+
+static uint16 s_wormRegion[64 * 64];
+static int64_t s_wormRegionTime = -1;
+
+static bool
+Unit_Sandworm_Passable(uint16 packed)
+{
+	if (g_map[packed].hasStructure)
+		return false;
+
+	return g_table_landscapeInfo[Map_GetLandscapeType(packed)].movementSpeed[MOVEMENT_SLITHER] != 0;
+}
+
+static void
+Unit_Sandworm_UpdateRegions(void)
+{
+	if (s_wormRegionTime >= g_tickScenarioStart && s_wormRegionTime <= g_timerGame
+			&& g_timerGame - s_wormRegionTime < 60 * SANDWORM_REGION_SECONDS)
+		return;
+
+	s_wormRegionTime = g_timerGame;
+	memset(s_wormRegion, 0, sizeof(s_wormRegion));
+
+	static uint16 stack[64 * 64];
+	uint16 region = 0;
+
+	for (uint16 start = 0; start < 64 * 64; start++) {
+		if (s_wormRegion[start] != 0 || !Unit_Sandworm_Passable(start))
+			continue;
+
+		/* A new stretch: flood it. */
+		int top = 0;
+
+		region++;
+		s_wormRegion[start] = region;
+		stack[top++] = start;
+
+		while (top > 0) {
+			const uint16 p = stack[--top];
+			const int x = Tile_GetPackedX(p), y = Tile_GetPackedY(p);
+			static const int dx[4] = { 1, -1, 0, 0 }, dy[4] = { 0, 0, 1, -1 };
+
+			for (int k = 0; k < 4; k++) {
+				const int nx = x + dx[k], ny = y + dy[k];
+
+				if (nx < 0 || ny < 0 || nx >= 64 || ny >= 64)
+					continue;
+
+				const uint16 n = Tile_PackXY(nx, ny);
+
+				if (s_wormRegion[n] == 0 && Unit_Sandworm_Passable(n)) {
+					s_wormRegion[n] = region;
+					stack[top++] = n;
+				}
+			}
+		}
+	}
+}
+
+bool
+Unit_Sandworm_CanReach(const Unit *worm, uint16 packed)
+{
+	Unit_Sandworm_UpdateRegions();
+
+	const uint16 from = s_wormRegion[Tile_PackTile(worm->o.position)];
+
+	/* A worm somewhere odd (just come up, say): let it try. */
+	return from == 0 || from == s_wormRegion[packed];
+}
+
 static void
 Unit_Sandworm_CheckStuck(Unit *worm)
 {
 	SandwormProgress *p = &s_wormProgress[worm->o.index];
-	const uint16 packed = Tile_PackTile(worm->o.position);
 
-	if (packed != p->packed || p->since > g_timerGame) {
-		p->packed = packed;
+	if (p->since > g_timerGame)
+		p->since = g_timerGame;
+
+	if (worm->targetAttack == 0) {
+		p->since = g_timerGame;
+		p->packed = 0xFFFF;
+		return;
+	}
+
+	/* Next to the target: it is eating, not stuck. */
+	const uint16 distance = Tile_GetDistance(worm->o.position, Tools_Index_GetTile(worm->targetAttack));
+
+	if (distance <= 2 * 256) {
 		p->since = g_timerGame;
 		return;
 	}
 
-	if (worm->targetAttack == 0)
-		return;
-
-	/* Next to the target: it is eating, not stuck. */
-	if (Tile_GetDistanceRoundedUp(worm->o.position, Tools_Index_GetTile(worm->targetAttack)) <= 2) {
+	/* Getting closer (p->packed keeps the closest it has been, in tiles):
+	 * progress.  Moving about without getting any closer is being stuck too.
+	 */
+	if (p->tracked != worm->targetAttack || p->packed == 0xFFFF || distance / 256 < p->packed) {
+		p->tracked = worm->targetAttack;
+		p->packed = distance / 256;
 		p->since = g_timerGame;
 		return;
 	}
 
 	if (g_timerGame - p->since < Tools_AdjustToGameSpeed(60 * SANDWORM_STUCK_SECONDS, 1, 0xFFFF, true))
 		return;
+
+	p->packed = 0xFFFF;
 
 	p->ignoredTarget = worm->targetAttack;
 	p->ignoreUntil = g_timerGame + Tools_AdjustToGameSpeed(60 * SANDWORM_IGNORE_SECONDS, 1, 0xFFFF, true);
@@ -1983,6 +2073,10 @@ static uint16 Unit_Sandworm_GetTargetPriority(Unit *unit, Unit *target)
 	if (!g_table_landscapeInfo[Map_GetLandscapeType(packed)].isSand)
 		return 0;
 
+	/* Replica: not across rock it cannot get over. */
+	if (!Unit_Sandworm_CanReach(unit, packed))
+		return 0;
+
 	/* SINGLE PLAYER -- Sandworms will only target units in scouted
 	 * territory.  Presumably this was done to prevent sandworms
 	 * attacking stationary CPU units, and out-of-sight worm attacks.
@@ -2805,6 +2899,7 @@ bool Unit_Damage(Unit *unit, uint16 damage, uint16 range)
 		if (enhancement_infantry_squad_death_animations) {
 			uint16 animationUnitID = g_table_landscapeInfo[Map_GetLandscapeType(Tile_PackTile(unit->o.position))].isSand ? 0 : 1;
 			Animation_Start(g_table_animation_unitScript2[animationUnitID], unit->o.position, 0, Unit_GetHouseID(unit), 4);
+			Remains_AddAnimation(g_table_animation_unitScript2[animationUnitID], 4, Unit_GetHouseID(unit), unit->o.position);
 		}
 	}
 

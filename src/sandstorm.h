@@ -12,5 +12,6 @@ extern bool g_sandstorms;         /* [graphics] sandstorms (default on). */
 extern void Sandstorm_Draw(void);
 extern void Sandstorm_Tick(void);
 extern float Sandstorm_GetStrength(void);   /* 0 when there is no storm, up to 1. */
+extern void Sandstorm_GetWind(float *x, float *y);  /* The storm's wind on the screen, a unit vector (kept after it ends). */
 
 #endif /* SANDSTORM_H */

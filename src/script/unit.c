@@ -36,6 +36,8 @@
 #include "../tools/random_lcg.h"
 #include "../tile.h"
 #include "../string.h"
+#include "../remains.h"
+#include "../thumper.h"
 #include "../unit.h"
 
 typedef struct Pathfinder_Data {
@@ -530,6 +532,10 @@ uint16 Script_Unit_Die(ScriptEngine *script)
 		g_scenario.score[u->o.houseID] -= max(ui->o.buildCredits / 100, 1);
 	}
 
+	/* Replica: a vehicle leaves its burnt hull, which stays a while. */
+	if (ui->movementType == MOVEMENT_TRACKED || ui->movementType == MOVEMENT_WHEELED || ui->movementType == MOVEMENT_HARVESTER)
+		Remains_AddVehicle(u);
+
 	Unit_Remove(u);
 	Unit_HouseUnitCount_Remove(u);
 
@@ -672,6 +678,23 @@ uint16 Script_Unit_Fire(ScriptEngine *script)
 			Unit_UpdateMap(0, u);
 
 			u2 = Tools_Index_GetUnit(target);
+
+			/* Replica: a thumper is swallowed, but it is no meal.  Nothing there at
+			 * all (the thumper went before the worm got to it): nothing eaten.
+			 */
+			if (u2 == NULL) {
+				const bool thumper = Thumper_Eat(Tile_PackTile(u->o.position));
+
+				Unit_UpdateMap(1, u);
+				u->targetAttack = 0;
+
+				if (thumper) {
+					Map_MakeExplosion(ui->explosionType, u->o.position, 0, 0);
+					Server_Send_PlaySoundAtTile(FLAG_HOUSE_ALL, SOUND_SANDWORM, u->o.position);
+					script->delay = 60;
+				}
+				break;
+			}
 
 			if (u2 != NULL) {
 				u2->o.script.variables[1] = 0xFFFF;
@@ -1484,7 +1507,7 @@ uint16 Script_Unit_CalculateRoute(ScriptEngine *script)
 				u->targetMove = 0;
 
 			if (u->o.type == UNIT_SANDWORM) {
-				script->delay = 720;
+				script->delay = 60;    /* Replica: no way there: a few seconds, not a minute (720), then it thinks again. */
 			}
 		}
 	} else {
@@ -1632,8 +1655,10 @@ uint16 Script_Unit_StartAnimation(ScriptEngine *script)
 	assert(animationUnitID < 4);
 	if (g_table_unitInfo[u->o.type].displayMode == DISPLAYMODE_INFANTRY_3_FRAMES) {
 		Animation_Start(g_table_animation_unitScript1[animationUnitID], u->o.position, 0, Unit_GetHouseID(u), 4);
+		Remains_AddAnimation(g_table_animation_unitScript1[animationUnitID], 4, Unit_GetHouseID(u), u->o.position);
 	} else {
 		Animation_Start(g_table_animation_unitScript2[animationUnitID], u->o.position, 0, Unit_GetHouseID(u), 4);
+		Remains_AddAnimation(g_table_animation_unitScript2[animationUnitID], 4, Unit_GetHouseID(u), u->o.position);
 	}
 
 	return 1;
@@ -2023,6 +2048,13 @@ uint16 Script_Unit_Sandworm_GetBestTarget(ScriptEngine *script)
 	VARIABLE_NOT_USED(script);
 
 	u = g_scriptCurrentUnit;
+
+	/* Replica: a thumper near enough calls the worm away from anything else. */
+	{
+		const uint16 thumper = Thumper_WormTarget(u);
+
+		if (thumper != 0) return thumper;
+	}
 
 	u2 = Unit_Sandworm_FindBestTarget(u);
 	if (u2 == NULL) return 0;

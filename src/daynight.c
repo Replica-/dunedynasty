@@ -348,6 +348,7 @@ typedef struct Light {
 	int x, y;
 	float dx, dy;   /* Facing, for the headlights. */
 	int size;       /* Buildings: the larger side, in tiles. */
+	float strength; /* 0 to 1: buildings coming on after a power cut are dim at first. */
 	enum LightKind kind;
 } Light;
 
@@ -365,6 +366,62 @@ DN_AddLight(int x, int y, float dx, float dy, int size, enum LightKind kind)
 	Light *l = &s_lights[s_numLights++];
 
 	l->x = x; l->y = y; l->dx = dx; l->dy = dy; l->size = size; l->kind = kind;
+	l->strength = 1.0f;
+}
+
+/* How far each house's lights have come back on, 0 to 1.  After a power cut
+ * they come on again over a few seconds, building by building, not all at once;
+ * when the power fails they go out quickly.
+ */
+#define POWER_ON_SECONDS 6.0f
+#define POWER_OFF_SECONDS 0.7f
+
+static float s_powerLevel[HOUSE_MAX];
+static int64_t s_powerTicks = -1;
+
+static void
+DN_UpdatePower(void)
+{
+	const int64_t now = Timer_GetTicks();
+	const float dt = (s_powerTicks < 0 || now < s_powerTicks) ? 1.0f : (float)(now - s_powerTicks) / 60.0f;
+
+	s_powerTicks = now;
+
+	for (int h = 0; h < HOUSE_MAX; h++) {
+		const House *house = House_Get_ByIndex(h);
+		const bool on = house != NULL && house->powerProduction >= house->powerUsage;
+
+		if (on)
+			s_powerLevel[h] = fminf(1.0f, s_powerLevel[h] + dt / POWER_ON_SECONDS);
+		else
+			s_powerLevel[h] = fmaxf(0.0f, s_powerLevel[h] - dt / POWER_OFF_SECONDS);
+	}
+}
+
+/* A building's own light as the power comes back: each comes on at its own
+ * moment, flickering at first, then steady.
+ */
+static float
+DN_BuildingLight(const Structure *s)
+{
+	const float level = s_powerLevel[s->o.houseID < HOUSE_MAX ? s->o.houseID : 0];
+
+	if (level >= 1.0f)
+		return 1.0f;
+
+	const uint32_t h = (uint32_t)(s->o.index + 1) * 2654435761u;
+	const float start = 0.7f * ((h >> 8) & 0xFF) / 255.0f;     /* When, in the house's coming back on. */
+	const float b = (level - start) / 0.3f;
+
+	if (b <= 0.0f)
+		return 0.0f;
+	if (b >= 1.0f)
+		return 1.0f;
+
+	/* Flickering while it catches: off now and then, less as it steadies. */
+	const uint32_t f = (uint32_t)(Timer_GetTicks() / 3) * 2246822519u + h;
+
+	return ((f >> 24) / 255.0f < b * 1.3f) ? b : b * 0.2f;
 }
 
 static void
@@ -373,6 +430,8 @@ DN_GatherLights(void)
 	PoolFindStruct find;
 
 	s_numLights = 0;
+
+	DN_UpdatePower();
 
 	for (const Unit *u = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_INVALID);
 			u != NULL;
@@ -407,10 +466,10 @@ DN_GatherLights(void)
 		if (s->o.flags.s.isNotOnMap || !DN_IsSolidStructure(s->o.type) || DN_IsHidden(s->o.position))
 			continue;
 
-		/* Without enough power the lights go out. */
-		const House *house = House_Get_ByIndex(s->o.houseID);
+		/* Without enough power the lights go out, and come back on bit by bit. */
+		const float strength = DN_BuildingLight(s);
 
-		if (house->powerProduction < house->powerUsage)
+		if (strength <= 0.0f)
 			continue;
 
 		int x, y;
@@ -421,6 +480,9 @@ DN_GatherLights(void)
 
 		DN_AddLight(x + size->width * 8, y + size->height * 8, 0.0f, 0.0f,
 				(size->width > size->height) ? size->width : size->height, LIGHT_BUILDING);
+
+		if (s_numLights > 0 && s_lights[s_numLights - 1].kind == LIGHT_BUILDING)
+			s_lights[s_numLights - 1].strength = strength;
 	}
 
 	for (int i = 1; i < Explosion_Get_NumActive(); i++) {
@@ -510,8 +572,8 @@ DN_PaintLight(const Light *l, float darkness)
 
 		case LIGHT_BUILDING:
 			/* Large: a building lights up a wide area, three times what it did. */
-			DN_SoftLight(cx, cy, (30.0f + 14.0f * l->size) * 3.0f, 0.90f, darkness);
-			DN_SoftLight(cx, cy, (14.0f + 7.0f * l->size) * 3.0f, 0.60f, darkness);
+			DN_SoftLight(cx, cy, (30.0f + 14.0f * l->size) * 3.0f, 0.90f * l->strength, darkness);
+			DN_SoftLight(cx, cy, (14.0f + 7.0f * l->size) * 3.0f, 0.60f * l->strength, darkness);
 			break;
 
 		case LIGHT_EXPLOSION:

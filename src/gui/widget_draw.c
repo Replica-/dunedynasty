@@ -25,6 +25,7 @@
 #include "../table/widgetinfo.h"
 #include "../tools/coord.h"
 #include "../unit.h"
+#include "../thumper.h"
 #include "../video/video.h"
 #include "../scenario.h"
 
@@ -533,6 +534,10 @@ void GUI_Widget_ActionPanel_Draw(bool forceDraw)
 						/* An ornithopter on area guard circles over it: a patrol. */
 						if (o->type == UNIT_ORNITHOPTER && actions[i] == ACTION_AREA_GUARD)
 							buttons[i]->stringID = STR_PATROL;
+
+						/* Atreides and Fremen infantry plant a thumper instead of retreating. */
+						if (Thumper_IsDropper(u) && actions[i] == ACTION_RETREAT)
+							buttons[i]->stringID = STR_THUMPER;
 						GUI_Widget_SetShortcuts(buttons[i]);
 						GUI_Widget_MakeVisible(buttons[i]);
 

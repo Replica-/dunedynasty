@@ -36,6 +36,7 @@ enum RadioKind {
 extern void AudioA5_LoadRadioVoices(const char *dataDir);
 extern int AudioA5_RadioVoiceCount(void);
 extern bool AudioA5_PlayRadio(int voiceSeed, enum RadioKind kind, float volume);
+extern void AudioA5_PlayThump(float volume, float pan);
 
 extern void AudioA5_LoadWind(const char *dataDir);
 extern void AudioA5_SetWind(float volume);

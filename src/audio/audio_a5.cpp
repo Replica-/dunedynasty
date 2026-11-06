@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 #include "buildcfg.h"
 
 #include "audio_a5.h"
@@ -92,6 +93,7 @@ static void AudioA5_InitAdlibEffects(void);
 static void AudioA5_FreeMusicStream(void);
 static void AudioA5_UnloadRadioVoices(void);
 static void AudioA5_UnloadWind(void);
+static void AudioA5_FreeThump(void);
 
 /*--------------------------------------------------------------*/
 /* --record-audio: the game's own sound, as it is mixed, to a WAV file.  Only the
@@ -360,6 +362,7 @@ void
 AudioA5_Uninit(void)
 {
 	AudioA5_StopRecording();
+	AudioA5_FreeThump();
 
 	for (int sampleID = 0; sampleID < SAMPLEID_MAX; sampleID++) {
 		al_destroy_sample(s_sample[sampleID]);
@@ -1133,4 +1136,74 @@ AudioA5_UnloadWind(void)
 	s_wind_instance = NULL;
 	al_destroy_sample(s_wind_sample);
 	s_wind_sample = NULL;
+}
+
+/*--------------------------------------------------------------*/
+
+/* The thump of a thumper: a short, low thud, made here rather than loaded. */
+
+static ALLEGRO_SAMPLE *s_thump;
+static ALLEGRO_SAMPLE_INSTANCE *s_thumpInstance;
+
+static void
+AudioA5_MakeThump(void)
+{
+	const int frames = SRATE / 6;
+	int16_t *pcm = (int16_t *)al_malloc(sizeof(int16_t) * frames);
+	uint32_t noise = 0x1234567u;
+
+	if (pcm == NULL)
+		return;
+
+	for (int i = 0; i < frames; i++) {
+		const float t = (float)i / SRATE;
+		const float env = expf(-t * 28.0f) * fminf(1.0f, t * 900.0f);
+		/* A thud falling from 95 to 45 Hz, with a little grit of sand in it. */
+		const float phase = 2.0f * 3.14159265f * (45.0f * t + 50.0f * (1.0f - expf(-t * 30.0f)) / 30.0f);
+
+		noise ^= noise << 13; noise ^= noise >> 17; noise ^= noise << 5;
+
+		const float grit = ((float)(noise & 0xFFFF) / 32768.0f - 1.0f) * expf(-t * 60.0f) * 0.12f;
+		const float v = (sinf(phase) * 0.9f + grit) * env;
+
+		pcm[i] = (int16_t)(v * 26000.0f);
+	}
+
+	s_thump = al_create_sample(pcm, frames, SRATE, ALLEGRO_AUDIO_DEPTH_INT16, ALLEGRO_CHANNEL_CONF_1, true);
+	if (s_thump == NULL) {
+		al_free(pcm);
+		return;
+	}
+
+	s_thumpInstance = al_create_sample_instance(s_thump);
+	if (s_thumpInstance != NULL)
+		al_attach_sample_instance_to_mixer(s_thumpInstance, al_mixer);
+}
+
+void
+AudioA5_PlayThump(float volume, float pan)
+{
+	if (al_mixer == NULL)
+		return;
+
+	if (s_thump == NULL)
+		AudioA5_MakeThump();
+	if (s_thumpInstance == NULL)
+		return;
+
+	al_stop_sample_instance(s_thumpInstance);
+	al_set_sample_instance_gain(s_thumpInstance, sound_volume * volume);
+	al_set_sample_instance_pan(s_thumpInstance, pan);
+	al_play_sample_instance(s_thumpInstance);
+}
+
+static void
+AudioA5_FreeThump(void)
+{
+	if (s_thumpInstance != NULL)
+		al_destroy_sample_instance(s_thumpInstance);
+	if (s_thump != NULL)
+		al_destroy_sample(s_thump);
+	s_thumpInstance = NULL;
+	s_thump = NULL;
 }

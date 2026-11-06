@@ -35,6 +35,7 @@
 #include "pool/pool_house.h"
 #include "pool/pool_structure.h"
 #include "pool/pool_unit.h"
+#include "sandstorm.h"
 #include "shape.h"
 #include "sprites.h"
 #include "structure.h"
@@ -51,6 +52,10 @@
 #define PATROL_POINTS 12            /* Waypoints on that circle. */
 #define PATROL_SPEED 90             /* Of 255: slow, so it is not a distraction. */
 #define MAX_AIR 16                  /* Air units have the low unit indices. */
+
+#define STORM_SLOW 0.55f            /* In a full sandstorm ornithopters fly at under half speed... */
+#define STORM_BLIND 0.3f            /* ... and once it is this strong, they see only... */
+#define STORM_SIGHT 3               /* ... this many tiles around them. */
 
 #define MAX_ICONS 12
 #define LABEL_H 8               /* Under the health bar: what it is doing. */
@@ -73,6 +78,7 @@ typedef struct Patrol {
 
 static Patrol s_patrol[MAX_AIR];
 static int64_t s_scenarioStart = -1;
+static bool s_huntAttacking[UNIT_INDEX_MAX];     /* Sent to attack by Hunt: back to hunting after. */
 
 /* Where the icons were last drawn, in screen pixels, so clicks can find them. */
 static struct {
@@ -131,12 +137,13 @@ Airwing_Waypoint(const Patrol *p, int point)
 	return t;
 }
 
-/* The nearest enemy the player can see inside the patrol area. */
+/* The nearest enemy it can see within reach of centre, and no further than sight
+ * from itself (in a sandstorm it sees little).
+ */
 static uint16
-Airwing_FindPatrolTarget(const Unit *unit, const Patrol *p)
+Airwing_FindTarget(const Unit *unit, tile32 centre, uint16 reach, uint16 sight)
 {
 	const uint8 houseID = Unit_GetHouseID(unit);
-	const uint16 reach = PATROL_RADIUS * 256;
 	PoolFindStruct find;
 	uint16 best = 0;
 	uint16 bestDistance = 0xFFFF;
@@ -152,7 +159,7 @@ Airwing_FindPatrolTarget(const Unit *unit, const Patrol *p)
 			continue;
 		if ((u->o.seenByHouses & (1 << houseID)) == 0)
 			continue;
-		if (Tile_GetDistance(p->centre, u->o.position) > reach)
+		if (Tile_GetDistance(centre, u->o.position) > reach || Tile_GetDistance(unit->o.position, u->o.position) > sight)
 			continue;
 
 		const uint16 d = Tile_GetDistance(unit->o.position, u->o.position);
@@ -170,7 +177,7 @@ Airwing_FindPatrolTarget(const Unit *unit, const Patrol *p)
 			continue;
 		if ((s->o.seenByHouses & (1 << houseID)) == 0)
 			continue;
-		if (Tile_GetDistance(p->centre, s->o.position) > reach)
+		if (Tile_GetDistance(centre, s->o.position) > reach || Tile_GetDistance(unit->o.position, s->o.position) > sight)
 			continue;
 
 		/* Units first: a structure only when it is a good deal nearer. */
@@ -195,26 +202,75 @@ Airwing_OverrideTarget(const Unit *unit, uint16 *encoded)
 	}
 
 	const Patrol *p = Airwing_GetPatrol(unit);
+	const bool blind = unit->o.type == UNIT_ORNITHOPTER && Sandstorm_GetStrength() > STORM_BLIND;
+	const uint16 sight = blind ? STORM_SIGHT * 256 : 0xFFFF;
 
-	if (p == NULL)
-		return false;
+	if (p != NULL) {
+		*encoded = Airwing_FindTarget(unit, p->centre, PATROL_RADIUS * 256, sight);
+		return true;
+	}
 
-	*encoded = Airwing_FindPatrolTarget(unit, p);
-	return true;
+	/* Any ornithopter, the enemy's too, sees only what is close in a sandstorm. */
+	if (blind) {
+		*encoded = Airwing_FindTarget(unit, unit->o.position, 0xFFFF, sight);
+		return true;
+	}
+
+	return false;
+}
+
+/* How fast an ornithopter may fly in the sandstorm there is now, of 255. */
+static uint16
+Airwing_StormSpeed(void)
+{
+	return (uint16)(255.0f * (1.0f - STORM_SLOW * Sandstorm_GetStrength()));
 }
 
 bool
 Airwing_LimitSpeed(const Unit *unit, uint16 *speed)
 {
+	bool limited = false;
+
+	/* Sandstorms slow ornithopters down. */
+	if (unit->o.type == UNIT_ORNITHOPTER && *speed > Airwing_StormSpeed()) {
+		*speed = Airwing_StormSpeed();
+		limited = true;
+	}
+
 	const Patrol *p = Airwing_GetPatrol(unit);
 
 	/* Slow while it circles; at full speed when it goes for something. */
 	if (p == NULL || unit->targetAttack != 0)
-		return false;
+		return limited;
 
 	if (*speed > PATROL_SPEED)
 		*speed = PATROL_SPEED;
 	return true;
+}
+
+/* In a sandstorm an ornithopter is slow, and loses sight of a target that is not close. */
+static void
+Airwing_StormTick(Unit *u)
+{
+	const float k = Sandstorm_GetStrength();
+
+	if (k <= 0.0f)
+		return;
+
+	if (u->movingSpeed > Airwing_StormSpeed())
+		Unit_SetSpeed(u, Airwing_StormSpeed());
+
+	if (k <= STORM_BLIND || u->targetAttack == 0 || !Tools_Index_IsValid(u->targetAttack))
+		return;
+
+	/* The player's attack order stands, storm or not. */
+	if (Airwing_IsPlayerOrnithopter(u) && u->actionID == ACTION_ATTACK)
+		return;
+
+	if (Tile_GetDistance(u->o.position, Tools_Index_GetTile(u->targetAttack)) > (STORM_SIGHT + 1) * 256) {
+		u->targetAttack = 0;
+		u->targetMove = 0;
+	}
 }
 
 /* Keeps a patrolling ornithopter at its post. */
@@ -385,6 +441,7 @@ Airwing_TestTick(void)
 					continue;
 
 				s_testAttacker = u->o.index;
+				u->o.hitpoints = g_table_unitInfo[u->o.type].o.hitpoints;   /* A fair test: it may have been hurt hunting. */
 				s_testTargetIndex = s->o.index;
 				s_testTargetHp = s->o.hitpoints;
 				Airwing_Log("idx=%d ordered to attack structure idx=%d type=%d hp=%d", u->o.index, s->o.index, s->o.type, s->o.hitpoints);
@@ -392,6 +449,10 @@ Airwing_TestTick(void)
 				break;
 			}
 		}
+
+		/* It cannot be shot down while it is being tested: the test is of the order, not its luck. */
+		if (u->o.index == s_testAttacker && !s_testAttackDone && u->actionID != ACTION_DIE)
+			u->o.hitpoints = g_table_unitInfo[u->o.type].o.hitpoints;
 
 		/* It keeps to that target, and hurts it. */
 		if (u->o.index == s_testAttacker && age >= 1900 && !s_testAttackDone) {
@@ -474,6 +535,7 @@ Airwing_TestTick(void)
 
 static void Airwing_UpdateSight(void);
 static void Airwing_TrackAir(void);
+static void Airwing_HuntTick(void);
 static void Airwing_AirDefence(void);
 static void Airwing_Fuses(void);
 static void Airwing_AirDefenceTest(void);
@@ -495,12 +557,15 @@ Airwing_Tick(void)
 
 	Airwing_UpdateSight();
 	Airwing_TrackAir();
+	Airwing_HuntTick();
 	Airwing_AirDefence();
 	Airwing_Fuses();
 
 	PoolFindStruct find;
 
 	for (Unit *u = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_ORNITHOPTER); u != NULL; u = Unit_FindNext(&find)) {
+		Airwing_StormTick(u);
+
 		if (Airwing_IsPlayerOrnithopter(u))
 			Airwing_PatrolTick(u);
 	}
@@ -663,6 +728,9 @@ Airwing_Click(int mouseX, int mouseY, bool add)
 void
 Airwing_OrderGiven(const Unit *u)
 {
+	if (u != NULL && u->o.index < UNIT_INDEX_MAX)
+		s_huntAttacking[u->o.index] = false;
+
 	if (u != NULL && u->o.index < MAX_AIR)
 		s_patrol[u->o.index].active = false;
 }
@@ -1108,4 +1176,207 @@ bool
 Airwing_ActsAtOnce(const Unit *u)
 {
 	return Airwing_IsPlayerOrnithopter(u);
+}
+
+/*--------------------------------------------------------------*/
+
+bool g_debugTestHunt = false;
+
+/* --test-hunt: every one of the player's fighting ground units hunts.  Logs who
+ * stops moving with nothing to shoot at, then quits after two minutes.
+ */
+void
+Airwing_DebugTestHunt(void)
+{
+	static int64_t start = -1, next;
+	static tile32 last[UNIT_INDEX_MAX];
+	static int still[UNIT_INDEX_MAX];
+	static bool hunter[UNIT_INDEX_MAX];
+	PoolFindStruct find;
+
+	if (start < 0) {
+		start = g_timerGame;
+		next = start;
+
+		for (Unit *u = Unit_FindFirst(&find, g_playerHouseID, UNIT_INVALID); u != NULL; u = Unit_FindNext(&find)) {
+			const UnitInfo *ui = &g_table_unitInfo[u->o.type];
+
+			if (u->o.flags.s.isNotOnMap || !ui->flags.isNormalUnit || ui->movementType == MOVEMENT_WINGER || u->o.type == UNIT_HARVESTER || u->o.type == UNIT_MCV)
+				continue;
+
+			Unit_Server_SetAction(u, ACTION_HUNT);
+			hunter[u->o.index] = true;
+			Airwing_Log("hunt: idx=%d type=%s", u->o.index, ui->o.name);
+		}
+		return;
+	}
+
+	if (g_timerGame < next)
+		return;
+	next = g_timerGame + 120;
+
+	int stuck = 0;
+
+	for (Unit *u = Unit_FindFirst(&find, g_playerHouseID, UNIT_INVALID); u != NULL; u = Unit_FindNext(&find)) {
+		if (u->o.index >= UNIT_INDEX_MAX || !hunter[u->o.index])
+			continue;
+
+		if (Tile_GetDistance(last[u->o.index], u->o.position) < 32)
+			still[u->o.index] += 2;
+		else
+			still[u->o.index] = 0;
+		last[u->o.index] = u->o.position;
+
+		if (still[u->o.index] >= 16) {
+			stuck++;
+			Airwing_Log("  idx=%d %s still for %d s at %d,%d action=%d next=%d attack=%04x move=%04x speed=%d delay=%d",
+					u->o.index, g_table_unitInfo[u->o.type].o.name, still[u->o.index],
+					u->o.position.x / 256, u->o.position.y / 256, u->actionID, u->nextActionID,
+					u->targetAttack, u->targetMove, u->movingSpeed, u->o.script.delay);
+		}
+	}
+
+	Airwing_Log("hunt t=%d s: %d hunters standing still", (int)((g_timerGame - start) / 60), stuck);
+
+	if (g_timerGame - start > 60 * 120)
+		exit(stuck == 0 ? 0 : 1);
+}
+
+/*--------------------------------------------------------------*/
+
+/* Hunt means hunt.  The game's hunters only go for what their side has seen, and
+ * with nothing in sight they stand still, often right after the fight they were
+ * in.  A player's hunter with nothing to shoot for a few seconds goes for the
+ * nearest enemy, seen or not: it will find it.
+ */
+#define HUNT_IDLE_TICKS (3 * 60)
+
+static int64_t s_huntIdleSince[UNIT_INDEX_MAX];
+
+static uint16
+Airwing_NearestEnemy(const Unit *u)
+{
+	const uint8 houseID = Unit_GetHouseID(u);
+	PoolFindStruct find;
+	uint16 best = 0;
+	uint16 bestDistance = 0xFFFF;
+
+	for (const Unit *e = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_INVALID); e != NULL; e = Unit_FindNext(&find)) {
+		const UnitInfo *ei = &g_table_unitInfo[e->o.type];
+
+		if (e->o.flags.s.isNotOnMap || !ei->flags.isNormalUnit || ei->movementType == MOVEMENT_WINGER || e->o.type == UNIT_SANDWORM)
+			continue;
+		if (House_AreAllied(Unit_GetHouseID(e), houseID))
+			continue;
+
+		const uint16 d = Tile_GetDistance(u->o.position, e->o.position);
+
+		if (d < bestDistance) {
+			bestDistance = d;
+			best = Tools_Index_Encode(e->o.index, IT_UNIT);
+		}
+	}
+
+	for (const Structure *s = Structure_FindFirst(&find, HOUSE_INVALID, STRUCTURE_INVALID); s != NULL; s = Structure_FindNext(&find)) {
+		if (s->o.type == STRUCTURE_SLAB_1x1 || s->o.type == STRUCTURE_SLAB_2x2 || s->o.type == STRUCTURE_WALL)
+			continue;
+		if (House_AreAllied(s->o.houseID, houseID))
+			continue;
+
+		const uint16 d = Tile_GetDistance(u->o.position, s->o.position);
+
+		if (d < bestDistance) {
+			bestDistance = d;
+			best = Tools_Index_Encode(s->o.index, IT_STRUCTURE);
+		}
+	}
+
+	return best;
+}
+
+static void
+Airwing_HuntTick(void)
+{
+	static int64_t next;
+	PoolFindStruct find;
+
+	if (g_timerGame < next)
+		return;
+	next = g_timerGame + 30;
+
+	for (Unit *u = Unit_FindFirst(&find, HOUSE_INVALID, UNIT_INVALID); u != NULL; u = Unit_FindNext(&find)) {
+		const UnitInfo *ui = &g_table_unitInfo[u->o.type];
+
+		if (u->o.index >= UNIT_INDEX_MAX)
+			continue;
+
+		/* Sent to attack by its hunt: once that is over, it hunts again. */
+		if (s_huntAttacking[u->o.index]) {
+			/* Still at it, or falling back for a moment (infantry do, when hurt). */
+			if ((u->actionID == ACTION_ATTACK && u->targetAttack != 0 && Tools_Index_IsValid(u->targetAttack))
+					|| u->actionID == ACTION_RETREAT || u->nextActionID == ACTION_RETREAT)
+				continue;
+
+			const bool fallingIdle = u->nextActionID == ACTION_GUARD || u->nextActionID == ACTION_STOP;
+
+			/* Back on the hunt for good. */
+			if (u->actionID == ACTION_HUNT && !fallingIdle) {
+				s_huntAttacking[u->o.index] = false;
+				s_huntIdleSince[u->o.index] = g_timerGame;
+				continue;
+			}
+
+			/* The attack is over, and the unit would stand guard: it hunts instead.
+			 * (A moving unit takes it as its next action, so this is checked again.)
+			 */
+			if (u->actionID == ACTION_ATTACK || u->actionID == ACTION_GUARD || u->actionID == ACTION_STOP || fallingIdle) {
+				if (g_debugTestHunt)
+					Airwing_Log("hunter idx=%d done attacking: action=%d next=%d, hunting again", u->o.index, u->actionID, u->nextActionID);
+				u->nextActionID = ACTION_INVALID;
+				Unit_Server_SetAction(u, ACTION_HUNT);
+				continue;
+			}
+
+			/* Anything else is the player's own order. */
+			s_huntAttacking[u->o.index] = false;
+			continue;
+		}
+
+		if (u->actionID != ACTION_HUNT || u->o.flags.s.isNotOnMap || !ui->flags.isNormalUnit
+				|| ui->movementType == MOVEMENT_WINGER || u->o.type == UNIT_SANDWORM
+				|| !House_IsHuman(Unit_GetHouseID(u))) {
+			s_huntIdleSince[u->o.index] = 0;
+			continue;
+		}
+
+		if (u->targetAttack != 0 && Tools_Index_IsValid(u->targetAttack)) {
+			s_huntIdleSince[u->o.index] = 0;
+			continue;
+		}
+
+		if (s_huntIdleSince[u->o.index] == 0 || s_huntIdleSince[u->o.index] < g_tickScenarioStart) {
+			s_huntIdleSince[u->o.index] = g_timerGame;
+			continue;
+		}
+
+		if (g_timerGame - s_huntIdleSince[u->o.index] < HUNT_IDLE_TICKS)
+			continue;
+
+		const uint16 target = Airwing_NearestEnemy(u);
+
+		if (target != 0) {
+			/* The script only goes after what its side has seen: it has now. */
+			if (Tools_Index_GetType(target) == IT_UNIT)
+				Tools_Index_GetUnit(target)->o.seenByHouses |= 1 << Unit_GetHouseID(u);
+			else
+				Tools_Index_GetStructure(target)->o.seenByHouses |= 1 << Unit_GetHouseID(u);
+
+			Unit_Server_SetAction(u, ACTION_ATTACK);
+			Unit_SetTarget(u, target);
+			s_huntAttacking[u->o.index] = true;
+			if (g_debugTestHunt)
+				Airwing_Log("hunter idx=%d had nothing to do: sent after %04x", u->o.index, target);
+		}
+		s_huntIdleSince[u->o.index] = g_timerGame;
+	}
 }

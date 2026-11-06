@@ -1640,6 +1640,24 @@ Viewport_DrawUnitTurret(const Unit *u, const UnitInfo *ui, int x, int y)
 	Shape_DrawRemap(shapeID, Unit_GetHouseID(u), x, y, 0, spriteFlags | 0xA000);
 }
 
+/* The sprite of a unit's body as it faces now, and whether it is flipped (1:
+ * across, 2: upside down), for the wreck it leaves behind.
+ */
+void
+Viewport_UnitBodySprite(const Unit *u, uint16 *shapeID, int *flip)
+{
+	const UnitInfo *ui = &g_table_unitInfo[u->o.type];
+	const uint8 orientation = Orientation_256To8(u->orientation[0].current);
+
+	*shapeID = ui->groundSpriteID;
+	*flip = 0;
+
+	if (ui->displayMode == DISPLAYMODE_UNIT || ui->displayMode == DISPLAYMODE_ROCKET) {
+		*shapeID += values_32A4[orientation][0];
+		*flip = values_32A4[orientation][1] & 0x3;
+	}
+}
+
 void
 Viewport_DrawUnit(const Unit *u, int windowX, int windowY, bool render_for_blur_effect)
 {
