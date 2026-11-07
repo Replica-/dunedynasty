@@ -208,6 +208,7 @@ extern uint16 Unit_GetTargetUnitPriority(Unit *unit, Unit *target);
 extern uint16 Unit_GetTargetStructurePriority(Unit *unit, const struct Structure *s);
 extern uint16 Unit_FindBestTargetEncoded(Unit *unit, uint16 mode);
 extern Unit *Unit_FindBestTargetUnit(Unit *u, uint16 mode);
+extern bool Unit_AI_MayAttackSandworm(enum HouseType houseID, const Unit *worm, bool turret);   /* The player always; AI houses only to defend their units, or with turrets; never the Atreides AI. */
 extern Unit *Unit_Sandworm_FindBestTarget(Unit *unit);
 
 #endif /* UNIT_H */

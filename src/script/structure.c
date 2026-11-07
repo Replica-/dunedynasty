@@ -386,6 +386,9 @@ uint16 Script_Structure_FindTargetUnit(ScriptEngine *script)
 
 		if (House_AreAllied(s->o.houseID, Unit_GetHouseID(uf))) continue;
 
+		/* Replica: AI turrets shoot at worms in range, but not the Atreides'. */
+		if (uf->o.type == UNIT_SANDWORM && !Unit_AI_MayAttackSandworm(s->o.houseID, uf, true)) continue;
+
 		if (uf->o.type != UNIT_ORNITHOPTER) {
 			if ((uf->o.seenByHouses & (1 << s->o.houseID)) == 0) continue;
 		}

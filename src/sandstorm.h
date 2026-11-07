@@ -7,7 +7,7 @@
 
 extern bool g_debugTestSandstorm; /* From --test-sandstorm: one storm at full strength, a screenshot, then quit. */
 extern bool g_debugSandstormNow;  /* From --sandstorm-now: a storm at full strength that stays, for a look. */
-extern bool g_sandstorms;         /* [graphics] sandstorms (default on). */
+extern bool g_sandstorms;         /* Always on; no longer an option. */
 
 extern void Sandstorm_Draw(void);
 extern void Sandstorm_Tick(void);

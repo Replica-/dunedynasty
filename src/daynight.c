@@ -30,6 +30,7 @@
 #include "sandstorm.h"
 #include "structure.h"
 #include "table/widgetinfo.h"
+#include "tithe.h"
 #include "timer/timer.h"
 #include "tools/coord.h"
 #include "unit.h"
@@ -698,9 +699,26 @@ DayNight_DrawIndicator(int x, int y)
 		Prim_FillRect_RGBA(bx + i, by, bx + i + 1, by + 4, cr, cg, cb, 255);
 	}
 
+	/* Purple: when the Sardaukar come for the spice tax, over the next full day. */
+	const int64_t cycle = (int64_t)TICKS_PER_SECOND * DAYNIGHT_CYCLE_SECONDS;
+	int64_t when[4];
+	bool visiting = false;
+	const int pickups = Tithe_GetPickups(when, 4, cycle, &visiting);
+
+	for (int i = 0; i < pickups; i++) {
+		const float pt = p + (float)(when[i] - g_timerGame) / (float)cycle;
+		const int tx = bx + (int)(fmodf(pt - PHASE_DAWN_BEGIN + 2.0f, 1.0f) * BAR_W);
+
+		Prim_FillRect_RGBA(tx, by - 2, tx + 1, by + 6, 190, 70, 235, 255);
+	}
+
 	/* Where we are. */
 	float m = fmodf(p - PHASE_DAWN_BEGIN + 1.0f, 1.0f);
 	const int mx = bx + (int)(m * BAR_W);
+
+	/* The frigate is here now: a purple frame round the marker. */
+	if (visiting)
+		Prim_FillRect_RGBA(mx - 1, by - 3, mx + 3, by + 7, 190, 70, 235, 255);
 
 	Prim_FillRect_RGBA(mx, by - 2, mx + 2, by + 6, 0, 0, 0, 255);
 	Prim_FillRect_RGBA(mx, by - 1, mx + 1, by + 5, 255, 255, 255, 255);

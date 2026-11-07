@@ -429,7 +429,7 @@ static int64_t s_wormRegionTime = -1;
 static bool
 Unit_Sandworm_Passable(uint16 packed)
 {
-	if (g_map[packed].hasStructure)
+	if (!Map_IsValidPosition(packed) || g_map[packed].hasStructure)
 		return false;
 
 	return g_table_landscapeInfo[Map_GetLandscapeType(packed)].movementSpeed[MOVEMENT_SLITHER] != 0;
@@ -1346,6 +1346,17 @@ void GameLoop_Unit(void)
 			Script_Load(&u->o.script, u->o.type);
 		}
 
+		/* Replica: an AI unit stops attacking a worm that is no longer after one of its units. */
+		if (tickScript && u->targetAttack != 0 && Tools_Index_GetType(u->targetAttack) == IT_UNIT) {
+			const Unit *worm = Tools_Index_GetUnit(u->targetAttack);
+
+			if (worm != NULL && worm->o.type == UNIT_SANDWORM
+					&& !Unit_AI_MayAttackSandworm(Unit_GetHouseID(u), worm, false)) {
+				if (u->targetMove == u->targetAttack) u->targetMove = 0;
+				u->targetAttack = 0;
+			}
+		}
+
 		if (tickScript && !Tithe_ControlsUnit(u)) {
 			if (u->o.script.delay == 0) {
 				if (Script_IsLoaded(&u->o.script)) {
@@ -2023,6 +2034,28 @@ void Unit_Remove(Unit *u)
 }
 
 /**
+ * Replica: whether a house may attack a sandworm.  The player always may.  An
+ * AI house only when the worm is after one of its units, or with a turret
+ * (which only shoots at what is in range); the Atreides AI never, as they
+ * revere the worms.
+ *
+ * @param houseID The house that would attack.
+ * @param worm The sandworm.
+ * @param turret True if a turret would do the shooting.
+ * @return True if it may attack the worm.
+ */
+bool Unit_AI_MayAttackSandworm(enum HouseType houseID, const Unit *worm, bool turret)
+{
+	if (House_IsHuman(houseID)) return true;
+	if (houseID == HOUSE_ATREIDES) return false;
+	if (turret) return true;
+
+	const Unit *prey = Tools_Index_GetUnit(worm->targetAttack);
+
+	return prey != NULL && Unit_GetHouseID(prey) == houseID;
+}
+
+/**
  * Gets the best target unit for the given unit.
  *
  * @param u The Unit to get the best target for.
@@ -2053,8 +2086,8 @@ Unit *Unit_FindBestTargetUnit(Unit *u, uint16 mode)
 			target != NULL;
 			target = Unit_FindNext(&find)) {
 		
-		// Replica AI Shouldnt attack sandworms let them kill my precioius sandworms ever
-		if (target->o.type == UNIT_SANDWORM && Unit_GetHouseID(u) != g_playerHouseID ) {
+		// Replica AI only attacks a sandworm that is after one of its units (never the Atreides)
+		if (target->o.type == UNIT_SANDWORM && !Unit_AI_MayAttackSandworm(Unit_GetHouseID(u), target, false)) {
 			continue;
 		}
 
@@ -2265,12 +2298,12 @@ Unit_Sandworm_FindTarget(Unit *unit, bool anyRegion)
 	return best;
 }
 
-/* Replica: a worm with nothing it can get at on its own sand dives for ten
+/* Replica: a worm with nothing it can get at on its own sand dives for forty
  * seconds, and comes up again on the sand of something it can eat.  With
  * nothing to eat anywhere, it wanders about.
  */
 #define SANDWORM_IDLE_TICKS 120         /* Two seconds without a target before it decides. */
-#define SANDWORM_SLEEP_SECONDS 10
+#define SANDWORM_SLEEP_SECONDS 40
 #define SANDWORM_WANDER_RADIUS 8
 
 static void
@@ -2306,7 +2339,10 @@ Unit_Sandworm_FindTileInRegion(uint16 region, uint16 centre, int minDist, int ma
 
 			const uint16 packed = Tile_PackXY(x, y);
 
-			if (s_wormRegion[packed] != region || Unit_Get_ByPackedTile(packed) != NULL)
+			/* Only sand on the map, and none with a unit on it. */
+			if (s_wormRegion[packed] != region || !Map_IsValidPosition(packed)
+					|| !g_table_landscapeInfo[Map_GetLandscapeType(packed)].isSand
+					|| Unit_Get_ByPackedTile(packed) != NULL)
 				continue;
 
 			/* Pick one of them evenly, as they are found. */
@@ -2367,6 +2403,10 @@ Unit_Sandworm_Think(Unit *worm)
 		Unit_Sandworm_DropTarget(worm);
 		Unit_SetSpeed(worm, 0);
 		worm->o.flags.s.isNotOnMap = true;
+
+		/* Out of sight under the sand: nothing can go on attacking it. */
+		Unit_UntargetMe(worm);
+		Unit_Unselect(worm);
 
 		p->idleSince = 0;
 		p->wandering = false;

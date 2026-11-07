@@ -1707,9 +1707,8 @@ GUI_String_Get_ByIndex(int16 stringID)
 		case -53: onoff = g_gameConfig.autoScroll; break;
 		case -58: onoff = g_hardware_effects; break;
 		case -59: onoff = g_radio_voices; break;
-		case -76: onoff = g_day_night; break;
-		case -77: onoff = g_sandstorms; break;
-		case -78: onoff = g_floating_log; break;
+		case -76: onoff = g_show_fps; break;
+		case -77: onoff = g_floating_log; break;
 
 		case -70:
 			if (enhancement_draw_health_bars == HEALTH_BAR_ALL_UNITS)

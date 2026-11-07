@@ -136,7 +136,7 @@ MenuBar_DrawRadarAnimation(void)
 	return true;
 }
 
-/* Tithe and sandworm counters, next to the credits. */
+/* The spice tax, the sandworm threat and the time of day, next to the credits. */
 static void
 MenuBar_DrawUnitCounters(const ScreenDiv *menubar)
 {
@@ -166,12 +166,14 @@ MenuBar_DrawUnitCounters(const ScreenDiv *menubar)
 	char tithe_text[48];
 	bool tithe_alert = false;
 
-	/* The next Sardaukar pickup, where the harvester count used to be. */
+	/* What the next Sardaukar pickup will take; when it is, the purple marks show. */
 	if (Tithe_GetStatusText(tithe_text, sizeof(tithe_text), &tithe_alert))
 		GUI_DrawText_Wrapper("%s", x, 5, tithe_alert ? 6 : 29, 0, 0x211, tithe_text);
 	GUI_DrawText_Wrapper("Worm Threat: %s", x - 127, 5, threat_fg, 0, 0x211, threat);
 
-	/* The time of day: a sun or moon, and a bar for the whole day with a marker. */
+	/* The time of day: a sun or moon, and a bar for the whole day with a marker,
+	 * and purple marks where the spice tax will be collected.
+	 */
 	if (DayNight_Active()) {
 		const int ix = x - 100 - 180;
 
@@ -619,7 +621,7 @@ MenuBar_ClickRadioButton(Widget *radio)
 		  -1
 		},
 		{ 26, 90, 91, 92, 93, 94, 95,
-		  66, 76, 67, 77, 68, 78,
+		  66, 76, 67, 77,
 		  -1
 		},
 	};
@@ -889,7 +891,7 @@ MenuBar_CreateGameControls(void)
 	 * 47, 57, 117  -- viewport scale label, slider.
 	 * 48, 58       -- hardware effects label, off/on.  Only with the OpenGL driver.
 	 * 49, 59       -- radio voices label, off/on.
-	 * 66, 76, 67, 77, 68, 78 -- day and night label, off/on; sandstorms label, off/on; floating message log label, off/on.
+	 * 66, 76, 67, 77 -- FPS counter label, off/on; floating message log label, off/on.
 	 *
 	 * 60, 70   -- health bars label, off/on/always on.
 	 * 61, 71   -- hi-res overlays label, off/on.
@@ -940,9 +942,8 @@ MenuBar_CreateGameControls(void)
 		{ 47, 2, "Viewport Scale" },
 		{ 48, 3, "Hardware effects" },
 		{ 49, VideoA5_HardwareEffectsAvailable() ? 4 : 3, "Radio voices" },
-		{ 66, 0, "Day and night" },
-		{ 67, 1, "Sandstorms" },
-		{ 68, 2, "Floating message log" },
+		{ 66, 0, "FPS counter" },
+		{ 67, 1, "Floating message log" },
 		{ 60, 0, "Health bars" },
 		{ 61, 1, "Hi-res overlays" },
 		{ 62, 2, "Smooth unit animation" },
@@ -979,9 +980,8 @@ MenuBar_CreateGameControls(void)
 		{ 53, 3,  46 }, /* Auto scroll. */
 		{ 58, 3,  64 }, /* Hardware effects. */
 		{ 59, VideoA5_HardwareEffectsAvailable() ? 4 : 3, 64 }, /* Radio voices. */
-		{ 76, 0,  64 }, /* Day and night. */
-		{ 77, 1,  64 }, /* Sandstorms. */
-		{ 78, 2,  64 }, /* Floating message log. */
+		{ 76, 0,  64 }, /* FPS counter. */
+		{ 77, 1,  64 }, /* Floating message log. */
 		{ 70, 0,  64 }, /* Health bars. */
 		{ 71, 1,  64 }, /* Hi-res vector graphics. */
 		{ 72, 2,  64 }, /* Smooth unit animation. */
@@ -1251,10 +1251,9 @@ MenuBar_TickGameControls(void)
 		case 0x8000 | 53: g_gameConfig.autoScroll ^= 0x1; break;
 		case 0x8000 | 58: g_hardware_effects = !g_hardware_effects; break;
 		case 0x8000 | 59: g_radio_voices = !g_radio_voices; break;
-		case 0x8000 | 76: g_day_night = !g_day_night; break;
-		case 0x8000 | 77: g_sandstorms = !g_sandstorms; break;
+		case 0x8000 | 76: g_show_fps = !g_show_fps; break;
 
-		case 0x8000 | 78:
+		case 0x8000 | 77:
 			g_floating_log = !g_floating_log;
 			A5_InitTransform(false);
 			GameLoop_TweakWidgetDimensions();

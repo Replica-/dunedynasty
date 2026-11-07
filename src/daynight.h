@@ -5,7 +5,7 @@
 
 #include <stdbool.h>
 
-extern bool g_day_night;            /* [graphics] day_night (default on). */
+extern bool g_day_night;            /* Always on; no longer an option. */
 extern float g_debugTimeOfDay;      /* From --time-of-day <0-1>: freezes the clock.  Negative: normal. */
 extern bool g_debugTestDayNight;    /* From --test-daynight: a screenshot after a few seconds, then quit. */
 

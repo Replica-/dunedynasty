@@ -42,7 +42,7 @@ bool g_debugTestTithe = false;
 
 #define TICKS_PER_SECOND 60
 
-#define TITHE_CREDITS (Tithe_Credits())
+#define TITHE_CREDITS (s_credits)
 #define TITHE_CREDITS_FIRST 50      /* The first mission. */
 #define TITHE_CREDITS_MAX 300       /* The eighth: the last that has a tax. */
 
@@ -61,13 +61,16 @@ Tithe_Credits(void)
 #define TITHE_MAX_MISSES 3
 #define TITHE_HOUSE HOUSE_SARDAUKAR
 
-/* A real tithe is every five minutes with two minutes of waiting.  The test is much quicker. */
-/* One tithe a day, in the morning: the game starts in the morning, so the first is when one full day has gone.
- * With no day and night it is every five minutes.  The test is much quicker.
+/* Two tithes in each day and night, 40% of it apart: half a day in, and 40% of a day
+ * after that, with two minutes of waiting.  The test is much quicker: every 40
+ * seconds from 10 seconds in.
  */
-#define INTERVAL_SECONDS (g_debugTestTithe ? 40 : (g_day_night ? DAYNIGHT_CYCLE_SECONDS : 300))
+#define PICKUP_FIRST 0.5            /* Of a day and night, from the start of each. */
+#define PICKUP_APART 0.4
 #define WAIT_SECONDS (g_debugTestTithe ? 15 : 120)
-#define FIRST_SECONDS (g_debugTestTithe ? 10 : INTERVAL_SECONDS)
+
+/* Each tithe is 80% to 120% of Tithe_Credits(). */
+#define CREDITS_VARY_PERCENT 20
 
 enum TitheState {
 	TITHE_IDLE,         /* Waiting for the next pickup. */
@@ -80,7 +83,10 @@ enum TitheState {
 
 static enum TitheState s_state = TITHE_IDLE;
 static int64_t s_scenarioStart = -1;
+static int64_t s_scheduleBase = 0;      /* Game time the pickups are counted from. */
+static int s_pickup = 0;                /* Which pickup is next, counting from 0. */
 static int64_t s_nextArrival = 0;       /* Game time of the next pickup. */
+static int s_credits = 0;               /* What the next (or this) tithe is. */
 static int64_t s_nextTry = 0;           /* When to try again to launch the frigate. */
 static int64_t s_leaveAt = 0;           /* Game time when the frigate gives up waiting. */
 static int64_t s_nextStep = 0;
@@ -529,6 +535,27 @@ Tithe_SendPending(void)
 
 /*--------------------------------------------------------------*/
 
+/* The game time of pickup k (0 the first). */
+static int64_t
+Tithe_PickupTime(int k)
+{
+	if (g_debugTestTithe)
+		return s_scheduleBase + (int64_t)(10 + 40 * k) * TICKS_PER_SECOND;
+
+	const int64_t day = (int64_t)DAYNIGHT_CYCLE_SECONDS * TICKS_PER_SECOND;
+
+	return s_scheduleBase + day * (k / 2) + (int64_t)(day * (PICKUP_FIRST + (k % 2) * PICKUP_APART));
+}
+
+/* What the next tithe will be: within CREDITS_VARY_PERCENT of the usual, in fives. */
+static void
+Tithe_RollCredits(void)
+{
+	const int percent = 100 - CREDITS_VARY_PERCENT + Tools_Random_256() % (2 * CREDITS_VARY_PERCENT + 1);
+
+	s_credits = (Tithe_Credits() * percent / 100 + 2) / 5 * 5;
+}
+
 static void
 Tithe_Finish(void)
 {
@@ -538,6 +565,8 @@ Tithe_Finish(void)
 	s_state = TITHE_IDLE;
 	s_frigateIndex = UNIT_INDEX_INVALID;
 	s_refineryIndex = STRUCTURE_INDEX_INVALID;
+
+	Tithe_RollCredits();
 }
 
 static void
@@ -551,7 +580,9 @@ Tithe_Reset(void)
 
 	Tithe_Finish();
 	s_scenarioStart = g_tickScenarioStart;
-	s_nextArrival = (g_debugTestTithe ? g_timerGame : g_tickScenarioStart) + (int64_t)FIRST_SECONDS * TICKS_PER_SECOND;
+	s_scheduleBase = g_debugTestTithe ? g_timerGame : g_tickScenarioStart;
+	s_pickup = 0;
+	s_nextArrival = Tithe_PickupTime(s_pickup);
 	s_nextTry = 0;
 	s_nextStep = 0;
 	s_misses = 0;
@@ -869,7 +900,7 @@ Tithe_Tick(void)
 		if (refinery == NULL) {
 			/* Nothing to land on. Try the next time. */
 			Tithe_Log("no refinery");
-			s_nextArrival += (int64_t)INTERVAL_SECONDS * TICKS_PER_SECOND;
+			s_nextArrival = Tithe_PickupTime(++s_pickup);
 			return;
 		}
 
@@ -881,7 +912,7 @@ Tithe_Tick(void)
 
 		s_visits++;
 		s_state = TITHE_INBOUND;
-		s_nextArrival += (int64_t)INTERVAL_SECONDS * TICKS_PER_SECOND;
+		s_nextArrival = Tithe_PickupTime(++s_pickup);
 		s_nextStep = 0;
 
 		GUI_DisplayText("A Sardaukar frigate is coming for the spice tax.", 2);
@@ -897,6 +928,31 @@ Tithe_Tick(void)
 	Tithe_Step();
 }
 
+int
+Tithe_GetPickups(int64_t *when, int max, int64_t horizon, bool *visiting)
+{
+	*visiting = false;
+
+	if (!Tithe_Enabled() || s_scenarioStart != g_tickScenarioStart)
+		return 0;
+
+	*visiting = (s_state == TITHE_INBOUND || s_state == TITHE_LANDED);
+
+	/* s_pickup has already moved on to the next one while the frigate is here. */
+	int n = 0;
+
+	for (int k = s_pickup; n < max; k++) {
+		const int64_t t = Tithe_PickupTime(k);
+
+		if (t >= g_timerGame + horizon)
+			break;
+		if (t >= g_timerGame)
+			when[n++] = t;
+	}
+
+	return n;
+}
+
 bool
 Tithe_GetStatusText(char *buf, size_t size, bool *alert)
 {
@@ -905,40 +961,15 @@ Tithe_GetStatusText(char *buf, size_t size, bool *alert)
 	if (!Tithe_Enabled() || s_scenarioStart != g_tickScenarioStart)
 		return false;
 
-	const int missNote = s_misses;
+	/* Red while the frigate is here, or once a tithe has been missed. */
+	*alert = (s_state == TITHE_INBOUND || s_state == TITHE_LANDED || s_misses > 0);
 
-	switch (s_state) {
-		case TITHE_INBOUND:
-			snprintf(buf, size, "Spice Tax: %d due", TITHE_CREDITS);
-			*alert = true;
-			return true;
+	if (s_misses > 0)
+		snprintf(buf, size, "Spice Tax: %d x%d", TITHE_CREDITS, s_misses);
+	else
+		snprintf(buf, size, "Spice Tax: %d", TITHE_CREDITS);
 
-		case TITHE_LANDED: {
-			const int left = (int)((s_leaveAt - g_timerGame) / TICKS_PER_SECOND);
-
-			snprintf(buf, size, "Spice Tax: %d, %d:%02d", TITHE_CREDITS, (left > 0 ? left : 0) / 60, (left > 0 ? left : 0) % 60);
-			*alert = true;
-			return true;
-		}
-
-		case TITHE_LEAVING:
-		case TITHE_IDLE: {
-			int left = (int)((s_nextArrival - g_timerGame) / TICKS_PER_SECOND);
-
-			if (left < 0)
-				left = 0;
-
-			if (missNote > 0) {
-				snprintf(buf, size, "Spice Tax: %d, %d:%02d x%d", TITHE_CREDITS, left / 60, left % 60, missNote);
-				*alert = true;
-			} else {
-				snprintf(buf, size, "Spice Tax: %d, %d:%02d", TITHE_CREDITS, left / 60, left % 60);
-			}
-			return true;
-		}
-	}
-
-	return false;
+	return true;
 }
 
 bool
