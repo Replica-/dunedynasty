@@ -95,6 +95,10 @@ typedef struct CPSStore {
 
 	char filename[128];
 	ALLEGRO_BITMAP *bmp;
+
+	/* gfx/widescreen/<name>.png: the picture carried on to the right, if there is one. */
+	ALLEGRO_BITMAP *wide;
+	bool wide_loaded;
 } CPSStore;
 
 typedef struct FadeInAux {
@@ -649,6 +653,7 @@ VideoA5_UninitCPSStore(void)
 		CPSStore *next = s_cps->next;
 
 		al_destroy_bitmap(s_cps->bmp);
+		al_destroy_bitmap(s_cps->wide);
 		free(s_cps);
 
 		s_cps = next;
@@ -1499,6 +1504,8 @@ VideoA5_ExportCPS(enum SearchDirectory dir, const char *filename, unsigned char 
 		return NULL;
 
 	cps->next = NULL;
+	cps->wide = NULL;
+	cps->wide_loaded = false;
 	if (dir == SEARCHDIR_CAMPAIGN_DIR) {
 		snprintf(cps->filename, sizeof(cps->filename), "%s%s", g_campaign_list[g_campaign_selected].dir_name, filename);
 	} else {
@@ -1560,6 +1567,7 @@ static void
 VideoA5_FreeCPS(CPSStore *cps)
 {
 	al_destroy_bitmap(cps->bmp);
+	al_destroy_bitmap(cps->wide);
 	free(cps);
 }
 
@@ -1823,10 +1831,11 @@ VideoA5_GetMentatFrame(ALLEGRO_BITMAP *src)
  * the picture outwards and fading it to black, as there is no wall to continue.
  */
 static void
-VideoA5_DrawEdgeFade(ALLEGRO_BITMAP *bmp, float w, float h, float right)
+VideoA5_DrawEdgeFade(ALLEGRO_BITMAP *bmp, float x, float h, float right)
 {
 	const int slices = 24;
-	const float length = min(right, w);
+	const float w = al_get_bitmap_width(bmp);
+	const float length = min(right, 320.0f);
 
 	if (length < 0.5f)
 		return;
@@ -1839,8 +1848,51 @@ VideoA5_DrawEdgeFade(ALLEGRO_BITMAP *bmp, float w, float h, float right)
 		const ALLEGRO_COLOR tint = al_map_rgba_f(c, c, c, 1.0f);
 
 		/* The last column of the picture, stretched out. */
-		al_draw_tinted_scaled_bitmap(bmp, tint, w - 1, 0, 1, h, w + i * sw, 0, sw, h, 0);
+		al_draw_tinted_scaled_bitmap(bmp, tint, w - 1, 0, 1, h, x + i * sw, 0, sw, h, 0);
 	}
+}
+
+/* A picture can be carried on to the right by gfx/widescreen/<name>.png, of the
+ * same height (e.g. gfx/widescreen/MENTATA.png for MENTATA.CPS), which is drawn
+ * straight after it.  Only Dune II's own pictures have one, as a campaign's
+ * picture of the same name may be different.
+ */
+static ALLEGRO_BITMAP *
+VideoA5_GetWidescreenPicture(CPSStore *cps)
+{
+	if (cps->wide_loaded)
+		return cps->wide;
+
+	cps->wide_loaded = true;
+
+	if (strchr(cps->filename, '/') != NULL)
+		return NULL;
+
+	char name[128];
+	snprintf(name, sizeof(name), "%s", cps->filename);
+
+	char *ext = strrchr(name, '.');
+	if (ext != NULL)
+		*ext = '\0';
+
+	char path[PATH_MAX];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+	snprintf(path, sizeof(path), "%s/gfx/widescreen/%s.png", g_dune_data_dir, name);
+#pragma GCC diagnostic pop
+
+	if (!al_filename_exists(path))
+		return NULL;
+
+	cps->wide = al_load_bitmap(path);
+
+	if (cps->wide != NULL && al_get_bitmap_height(cps->wide) != al_get_bitmap_height(cps->bmp)) {
+		fprintf(stderr, "%s: not %d pixels high, ignored\n", path, al_get_bitmap_height(cps->bmp));
+		al_destroy_bitmap(cps->wide);
+		cps->wide = NULL;
+	}
+
+	return cps->wide;
 }
 /* Draw a full-screen CPS picture, and fill the empty bars that a window of
  * another shape than 4:3 leaves around it.  Where the picture is a mentat
@@ -1849,6 +1901,8 @@ VideoA5_DrawEdgeFade(ALLEGRO_BITMAP *bmp, float w, float h, float right)
  * repeated at its true size (its seams run the whole height of the band, so
  * they carry on from one repeat to the next).  All of it is made at load
  * time from the picture itself, so nothing is stored or changed on disk.
+ * Where the picture has a gfx/widescreen/<name>.png, that is drawn to its
+ * right instead of the made frame, and the made wall only shows beyond it.
  */
 void
 VideoA5_DrawCPSFill(enum SearchDirectory dir, const char *filename)
@@ -1883,11 +1937,19 @@ VideoA5_DrawCPSFill(enum SearchDirectory dir, const char *filename)
 	const ALLEGRO_COLOR tint = al_map_rgba_f(0.85f, 0.85f, 0.85f, 1.0f);
 
 	ALLEGRO_BITMAP *frame = VideoA5_GetMentatFrame(cps->bmp);
+	ALLEGRO_BITMAP *wide = VideoA5_GetWidescreenPicture(cps);
+	const float wideW = (wide != NULL) ? al_get_bitmap_width(wide) : 0.0f;
 
 	/* Pictures that are not laid out like the standard mentat screens just fade out. */
 	if (frame == NULL) {
 		al_draw_bitmap(cps->bmp, 0, 0, 0);
-		VideoA5_DrawEdgeFade(cps->bmp, w, h, right);
+
+		if (wide != NULL && right > 0.5f) {
+			al_draw_bitmap(wide, w, 0, 0);
+			VideoA5_DrawEdgeFade(wide, w + wideW, h, right - wideW);
+		} else {
+			VideoA5_DrawEdgeFade(cps->bmp, w, h, right);
+		}
 		return;
 	}
 
@@ -1965,13 +2027,16 @@ VideoA5_DrawCPSFill(enum SearchDirectory dir, const char *filename)
 	float edge = w;
 
 	if (right > 0.5f) {
-		if (frame != NULL) {
+		if (wide != NULL) {
+			al_draw_bitmap(wide, w, 0, 0);
+			edge = w + wideW;
+		} else {
 			al_draw_bitmap(frame, MENTAT_FRAME_RIGHT + 1, MENTAT_FRAME_TOP - MENTAT_FRAME_THICKNESS, 0);
 			edge = MENTAT_FRAME_RIGHT + 1 + MENTAT_FRAME_THICKNESS;
 		}
 
 		/* A soft shadow along the edge of the frame (or the picture), so the join is not hard. */
-		for (int i = 0; i < 8; i++) {
+		for (int i = 0; (edge < w + right) && (i < 8); i++) {
 			const float alpha = 0.5f * (1.0f - i / 8.0f);
 
 			al_draw_filled_rectangle(edge + i, 0, edge + i + 1.0f, h, al_map_rgba_f(0.0f, 0.0f, 0.0f, alpha));
