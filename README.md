@@ -50,9 +50,12 @@ __Unit panel__
 
 __Mentat screens__
 
-- On a widescreen window the mentat screens (the in-game Mentat and the mission briefings) are no longer a 4:3 picture in the middle of black bars: the mentat sits at the left, the TV frame that the picture cuts off is completed on the right (the layers of its top and bottom bars are turned into the right bar, with mitred corners), and the rest of the window is filled with the wall pattern. All of it is made while the game runs, from the game's own `MENTAT*.CPS` picture, so nothing is stored or changed. Mentat pictures of custom campaigns that are not laid out like the originals only get the wall. `--test-mentat` takes a screenshot of the in-game Mentat
+- On a widescreen window the mentat screens (the in-game Mentat and the mission briefings) are no longer a 4:3 picture in the middle of black bars: the mentat sits at the left, and the picture is carried on to the right. For the Atreides, Harkonnen, Ordos and Bene Gesserit mentats, a 107 pixel strip in `gfx/widescreen/` (made by outpainting the original picture) completes the TV frame and the wall, which fills a 16:9 window; the original picture itself is drawn untouched. Other mentat pictures, and wider windows beyond the strip, get a TV frame completed from the picture itself (the layers of its top and bottom bars are turned into the right bar, with mitred corners) and the wall pattern. Mentat pictures of custom campaigns that are not laid out like the originals only get the wall. `--test-mentat` takes a screenshot of the in-game Mentat
 
-![Mentat screen on a widescreen window](/docs/fork-mentat-widescreen.png)
+![Mentat screen on a widescreen window, Atreides](/docs/fork-mentat-widescreen.png)
+![Mentat screen on a widescreen window, Harkonnen](/docs/fork-mentat-widescreen-harkonnen.png)
+![Mentat screen on a widescreen window, Ordos](/docs/fork-mentat-widescreen-ordos.png)
+![Mentat screen on a widescreen window, Bene Gesserit](/docs/fork-mentat-widescreen-bene-gesserit.png)
 
 __Controls__
 
