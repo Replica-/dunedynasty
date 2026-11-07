@@ -2233,6 +2233,30 @@ Unit_Sandworm_CanReachUnit(const Unit *worm, const Unit *target)
 	return region != 0 && region == Unit_Sandworm_RegionAt(worm->o.position);
 }
 
+/**
+ * Replica: whether a worm would go for this unit: one on the map, on sand the
+ * worm can get to, and not one of those worms leave alone (keep in step with
+ * Unit_Sandworm_FindTarget below).
+ *
+ * @param worm The sandworm.
+ * @param target The unit.
+ * @return True if the worm could eat it.
+ */
+bool
+Unit_Sandworm_CouldEat(Unit *worm, Unit *target)
+{
+	if (worm == NULL || target == NULL || target == worm) return false;
+	if (target->o.flags.s.isNotOnMap || Unit_Sandworm_IsIgnored(worm, target)) return false;
+	if (!Unit_Sandworm_CanReachUnit(worm, target)) return false;
+
+	if (Unit_GetHouseID(target) != g_playerHouseID
+			&& (target->actionID == ACTION_AREA_GUARD || target->o.type == UNIT_HARVESTER))
+		return false;
+
+	/* On sand, and something a worm eats (not an aircraft, say). */
+	return Unit_Sandworm_GetTargetPriority(worm, target) != 0;
+}
+
 static Unit *
 Unit_Sandworm_FindTarget(Unit *unit, bool anyRegion)
 {

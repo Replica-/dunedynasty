@@ -210,5 +210,6 @@ extern uint16 Unit_FindBestTargetEncoded(Unit *unit, uint16 mode);
 extern Unit *Unit_FindBestTargetUnit(Unit *u, uint16 mode);
 extern bool Unit_AI_MayAttackSandworm(enum HouseType houseID, const Unit *worm, bool turret);   /* The player always; AI houses only to defend their units, or with turrets; never the Atreides AI. */
 extern Unit *Unit_Sandworm_FindBestTarget(Unit *unit);
+extern bool Unit_Sandworm_CouldEat(Unit *worm, Unit *target);   /* On sand the worm can reach, and not one worms leave alone. */
 
 #endif /* UNIT_H */

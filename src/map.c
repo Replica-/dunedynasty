@@ -543,6 +543,9 @@ void Map_MakeExplosion(uint16 type, tile32 position, uint16 hitpoints, uint16 un
 			if (us == u) continue;
 			if (House_AreAllied(Unit_GetHouseID(u), Unit_GetHouseID(us))) continue;
 
+			/* Replica: a worm only turns on an attacker it could eat, on sand it can reach. */
+			if (u->o.type == UNIT_SANDWORM && !Unit_Sandworm_CouldEat(u, us)) continue;
+
 			t = Unit_GetTeam(u);
 			if (t != NULL) {
 				const UnitInfo *targetInfo;
