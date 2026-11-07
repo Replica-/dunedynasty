@@ -888,6 +888,25 @@ VideoA5_Tick(void)
 		const float y0 = g_screenDiv[SCREENDIV_VIEWPORT].y + 4.0f * scale;
 		const float h = al_get_bitmap_height(s_font[2]['0']);
 
+		/* Straight onto the screen's back buffer, in its pixels, so that nothing the
+		 * game or the menus left behind (a target, a transform, a clipping area, a
+		 * blender, a palette) can move it, hide it or colour it.
+		 */
+		ALLEGRO_BITMAP *prev_target = al_get_target_bitmap();
+		ALLEGRO_BITMAP *backbuffer = al_get_backbuffer(display);
+		ALLEGRO_TRANSFORM prev_transform, identity;
+		int cx, cy, cw, ch;
+		int old_op, old_src, old_dst;
+
+		al_set_target_bitmap(backbuffer);
+		al_copy_transform(&prev_transform, al_get_current_transform());
+		al_identity_transform(&identity);
+		al_use_transform(&identity);
+		al_get_clipping_rectangle(&cx, &cy, &cw, &ch);
+		al_set_clipping_rectangle(0, 0, al_get_bitmap_width(backbuffer), al_get_bitmap_height(backbuffer));
+		al_get_blender(&old_op, &old_src, &old_dst);
+		al_set_blender(ALLEGRO_ADD, ALLEGRO_ONE, ALLEGRO_INVERSE_ALPHA);
+
 		al_draw_filled_rectangle(x0 - 2.0f * scale, y0 - 2.0f * scale,
 				x0 + (6.0f * len + 1.0f) * scale, y0 + (h + 1.0f) * scale, al_map_rgba(0, 0, 0, 160));
 
@@ -897,11 +916,16 @@ VideoA5_Tick(void)
 
 			if (glyph == NULL) continue;
 
-			al_draw_tinted_scaled_bitmap(glyph, paltoRGB[15], 0, 0,
+			al_draw_tinted_scaled_bitmap(glyph, al_map_rgb(255, 255, 255), 0, 0,
 					al_get_bitmap_width(glyph), al_get_bitmap_height(glyph),
 					x0 + 6.0f * scale * i, y0,
 					al_get_bitmap_width(glyph) * scale, al_get_bitmap_height(glyph) * scale, 0);
 		}
+
+		al_set_blender(old_op, old_src, old_dst);
+		al_set_clipping_rectangle(cx, cy, cw, ch);
+		al_use_transform(&prev_transform);
+		al_set_target_bitmap(prev_target);
 
 		l_fps++;
 		if (curr_time - l_last_time >= 0.5f) {
@@ -929,6 +953,7 @@ VideoA5_Tick(void)
 
 	if (s_post_shader != NULL)
 		VideoA5_PostFX();
+
 
 	al_flip_display();
 	al_clear_to_color(paltoRGB[0]);
